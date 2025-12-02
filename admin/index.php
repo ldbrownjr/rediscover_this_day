@@ -12,6 +12,17 @@ $messageType = '';
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
     
+    // Determine action based on which button was clicked
+    if (isset($_POST['save_config'])) {
+        $action = 'save_config';
+    } elseif (isset($_POST['change_password'])) {
+        $action = 'change_password';
+    } elseif (isset($_POST['test_connection'])) {
+        $action = 'test_connection';
+    } elseif (isset($_POST['refresh_now'])) {
+        $action = 'refresh_now';
+    }
+    
     if ($action === 'save_config') {
         // Update Synology settings
         $config['synology']['url'] = trim($_POST['synology_url']);
@@ -143,68 +154,50 @@ $lastRefresh = getLastRefreshInfo();
             </div>
         <?php endif; ?>
         
+        <form method="POST" action="index.php">
         <div class="admin-content">
             <!-- Top Row: Connection and Photo Settings -->
             <div class="admin-grid">
                 <!-- Synology Connection Settings -->
                 <section class="admin-section compact">
                     <h3>Synology Connection</h3>
-                    <form method="POST" action="index.php">
-                        <input type="hidden" name="action" value="save_config">
-                        
-                        <div class="form-row">
-                            <div class="form-group">
-                                <label for="synology_url">NAS URL:</label>
-                                <input type="text" id="synology_url" name="synology_url" 
-                                       value="<?php echo h($config['synology']['url']); ?>"
-                                       placeholder="https://192.168.1.100:5001">
-                            </div>
-                            
-                            <div class="form-group">
-                                <label for="synology_username">Username:</label>
-                                <input type="text" id="synology_username" name="synology_username" 
-                                       value="<?php echo h($config['synology']['username']); ?>">
-                            </div>
+                    
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="synology_url">NAS URL:</label>
+                            <input type="text" id="synology_url" name="synology_url" 
+                                   value="<?php echo h($config['synology']['url']); ?>"
+                                   placeholder="https://192.168.1.100:5001">
                         </div>
                         
                         <div class="form-group">
-                            <label for="synology_password">Password:</label>
-                            <input type="password" id="synology_password" name="synology_password" 
-                                   placeholder="Leave blank to keep current">
+                            <label for="synology_username">Username:</label>
+                            <input type="text" id="synology_username" name="synology_username" 
+                                   value="<?php echo h($config['synology']['username']); ?>">
                         </div>
-                        
-                        <div class="form-actions">
-                            <button type="submit" class="btn btn-primary btn-sm">Save</button>
-                            <form method="POST" action="index.php" style="display: inline;">
-                                <input type="hidden" name="action" value="test_connection">
-                                <button type="submit" class="btn btn-secondary btn-sm">Test</button>
-                            </form>
-                        </div>
-                    </form>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="synology_password">Password:</label>
+                        <input type="password" id="synology_password" name="synology_password" 
+                               placeholder="Leave blank to keep current">
+                    </div>
+                    
+                    <div class="form-actions">
+                        <button type="submit" name="test_connection" class="btn btn-secondary btn-sm">Test Connection</button>
+                    </div>
                 </section>
                 
                 <!-- Photo Settings -->
                 <section class="admin-section compact">
                     <h3>Photo Settings</h3>
-                    <form method="POST" action="index.php">
-                        <input type="hidden" name="action" value="save_config">
-                        
-                        <!-- Copy other fields as hidden -->
-                        <input type="hidden" name="synology_url" value="<?php echo h($config['synology']['url']); ?>">
-                        <input type="hidden" name="synology_username" value="<?php echo h($config['synology']['username']); ?>">
-                        <input type="hidden" name="duration" value="<?php echo h($config['slideshow']['duration']); ?>">
-                        <input type="hidden" name="transition" value="<?php echo h($config['slideshow']['transition']); ?>">
-                        <input type="hidden" name="refresh_time" value="<?php echo h($config['slideshow']['refresh_time']); ?>">
-                        
-                        <div class="form-group">
-                            <label for="first_year">First Year:</label>
-                            <input type="number" id="first_year" name="first_year" 
-                                   value="<?php echo h($config['photos']['first_year']); ?>"
-                                   min="1900" max="<?php echo date('Y'); ?>">
-                        </div>
-                        
-                        <button type="submit" class="btn btn-primary btn-sm">Save</button>
-                    </form>
+                    
+                    <div class="form-group">
+                        <label for="first_year">First Year:</label>
+                        <input type="number" id="first_year" name="first_year" 
+                               value="<?php echo h($config['photos']['first_year']); ?>"
+                               min="1900" max="<?php echo date('Y'); ?>">
+                    </div>
                 </section>
             </div>
             
@@ -213,30 +206,30 @@ $lastRefresh = getLastRefreshInfo();
                 <!-- Slideshow Settings -->
                 <section class="admin-section compact">
                     <h3>Slideshow</h3>
-                    <form method="POST" action="index.php">
-                        <input type="hidden" name="action" value="save_config">
-                        
-                        <!-- Copy other fields as hidden -->
-                        <input type="hidden" name="synology_url" value="<?php echo h($config['synology']['url']); ?>">
-                        <input type="hidden" name="synology_username" value="<?php echo h($config['synology']['username']); ?>">
-                        <input type="hidden" name="first_year" value="<?php echo h($config['photos']['first_year']); ?>">
-                        
-                        <div class="form-row">
-                            <div class="form-group">
-                                <label for="duration">Duration (sec):</label>
-                                <input type="number" id="duration" name="duration" 
-                                       value="<?php echo h($config['slideshow']['duration']); ?>"
-                                       min="1" max="60">
-                            </div>
-                            
-                            <div class="form-group">
-                                <label for="transition">Transition:</label>
-                                <select id="transition" name="transition">
-                                    <option value="fade" <?php echo $config['slideshow']['transition'] === 'fade' ? 'selected' : ''; ?>>Fade</option>
-                                    <option value="none" <?php echo $config['slideshow']['transition'] === 'none' ? 'selected' : ''; ?>>Instant</option>
-                                </select>
-                            </div>
+                    
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="duration">Duration (sec):</label>
+                            <input type="number" id="duration" name="duration" 
+                                   value="<?php echo h($config['slideshow']['duration']); ?>"
+                                   min="1" max="60">
                         </div>
+                        
+                        <div class="form-group">
+                            <label for="transition">Transition:</label>
+                            <select id="transition" name="transition">
+                                <option value="fade" <?php echo $config['slideshow']['transition'] === 'fade' ? 'selected' : ''; ?>>Fade</option>
+                                <option value="none" <?php echo $config['slideshow']['transition'] === 'none' ? 'selected' : ''; ?>>Instant</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="refresh_time">Refresh Time:</label>
+                        <input type="time" id="refresh_time" name="refresh_time" 
+                               value="<?php echo h($config['slideshow']['refresh_time']); ?>">
+                    </div>
+                </section>
                         
                         <div class="form-group">
                             <label for="refresh_time">Refresh Time:</label>
@@ -319,12 +312,15 @@ $lastRefresh = getLastRefreshInfo();
                                 <option value="DEBUG" <?php echo (isset($config['debug']['log_level']) && $config['debug']['log_level'] === 'DEBUG') ? 'selected' : ''; ?>>DEBUG</option>
                             </select>
                         </div>
-                        
-                        <button type="submit" class="btn btn-primary btn-sm">Save</button>
-                    </form>
                 </section>
             </div>
+            
+            <!-- Main Action Buttons -->
+            <div class="form-actions main-actions">
+                <button type="submit" name="save_config" class="btn btn-primary">Save All Settings</button>
+            </div>
         </div>
+        </form>
     </div>
 </body>
 </html>
