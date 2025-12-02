@@ -85,6 +85,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
     elseif ($action === 'test_connection') {
+        // Debug: Output that we reached this point
+        error_log('DEBUG: Starting test_connection action');
+        
         if (empty($config['synology']['url']) || empty($config['synology']['username']) || empty($config['synology']['password'])) {
             $message = 'Please configure Synology connection settings first';
             $messageType = 'error';
@@ -92,6 +95,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } else {
             try {
                 logMessage('Testing connection to: ' . $config['synology']['url'], 'INFO');
+                error_log('DEBUG: Config loaded, URL: ' . $config['synology']['url']);
                 
                 // Check if cURL is available
                 if (!function_exists('curl_init')) {
@@ -100,20 +104,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     logMessage('cURL extension not available', 'ERROR');
                     return;
                 }
+                error_log('DEBUG: cURL is available');
                 
                 // Check if SynologyAPI class exists
                 if (!class_exists('SynologyAPI')) {
                     require_once '../api/synology.php';
                     logMessage('Loaded SynologyAPI class', 'DEBUG');
+                    error_log('DEBUG: SynologyAPI class loaded');
                 }
                 
+                error_log('DEBUG: Creating SynologyAPI object');
                 $api = new SynologyAPI(
                     $config['synology']['url'],
                     $config['synology']['username'],
                     $config['synology']['password']
                 );
                 logMessage('SynologyAPI object created successfully', 'DEBUG');
+                error_log('DEBUG: SynologyAPI object created');
                 
+                error_log('DEBUG: Calling testConnection');
                 if ($api->testConnection()) {
                     $message = 'Connection successful!';
                     $messageType = 'success';
@@ -129,6 +138,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $messageType = 'error';
                 logMessage('Synology connection test exception: ' . $e->getMessage(), 'ERROR');
                 error_log('SynologyAPI test connection error: ' . $e->getMessage());
+            } catch (Throwable $t) {
+                $message = 'Connection test fatal error: ' . $t->getMessage();
+                $messageType = 'error';
+                logMessage('Synology connection test throwable: ' . $t->getMessage(), 'ERROR');
+                error_log('SynologyAPI test connection throwable: ' . $t->getMessage());
             }
         }
     }
@@ -153,6 +167,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 $lastRefresh = getLastRefreshInfo();
 ?>
+<!-- DEBUG: Message = <?php echo htmlspecialchars($message ?? 'NO MESSAGE'); ?>, Type = <?php echo htmlspecialchars($messageType ?? 'NO TYPE'); ?> -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
