@@ -15,36 +15,8 @@ define('CACHE_PATH', BASE_PATH . '/cache');
 define('LOG_PATH', BASE_PATH . '/logs');
 
 /**
- * Get the web base path (URL path from document root to application)
+ * Load configuration from JSON file
  */
-function getWebBasePath() {
-    // Simple approach: extract from current request
-    if (isset($_SERVER['REQUEST_URI']) && isset($_SERVER['SCRIPT_NAME'])) {
-        $scriptDir = dirname($_SERVER['SCRIPT_NAME']);
-        $requestDir = dirname($_SERVER['REQUEST_URI']);
-        
-        // Find the common base path
-        $scriptParts = explode('/', trim($scriptDir, '/'));
-        $requestParts = explode('/', trim($requestDir, '/'));
-        
-        $baseParts = [];
-        $maxLen = min(count($scriptParts), count($requestParts));
-        
-        for ($i = 0; $i < $maxLen; $i++) {
-            if ($scriptParts[$i] === $requestParts[$i]) {
-                $baseParts[] = $scriptParts[$i];
-            } else {
-                break;
-            }
-        }
-        
-        $basePath = '/' . implode('/', $baseParts);
-        return $basePath === '/' ? '' : $basePath;
-    }
-    
-    // Fallback: return empty (assume root installation)
-    return '';
-}
 function loadConfig() {
     if (!file_exists(CONFIG_PATH)) {
         // Copy default config if config doesn't exist
@@ -111,13 +83,8 @@ function isAdminLoggedIn() {
  */
 function requireAdmin() {
     if (!isAdminLoggedIn()) {
-        try {
-            $basePath = getWebBasePath();
-            header('Location: ' . $basePath . '/admin/login.php');
-        } catch (Exception $e) {
-            // Fallback to relative redirect if getWebBasePath fails
-            header('Location: login.php');
-        }
+        // Use relative redirect for subdirectory installations
+        header('Location: admin/login.php');
         exit;
     }
 }
