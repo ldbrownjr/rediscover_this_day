@@ -92,10 +92,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $message = 'Please configure Synology connection settings first';
             $messageType = 'error';
             logMessage('Test connection failed: missing configuration', 'ERROR');
-        } elseif (!function_exists('curl_init')) {
-            $message = 'cURL extension is not available on this server';
-            $messageType = 'error';
-            logMessage('cURL extension not available', 'ERROR');
         } else {
             try {
                 logMessage('Testing connection to: ' . $config['synology']['url'], 'INFO');

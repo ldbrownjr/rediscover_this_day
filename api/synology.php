@@ -238,14 +238,18 @@ class SynologyAPI {
      * Make HTTP request
      */
     private function makeRequest($url, $params = [], $method = 'GET') {
-        // Check if cURL is available
-        if (!function_exists('curl_init')) {
-            logMessage('cURL extension is not available', 'ERROR');
-            throw new Exception('cURL extension is not available');
+        // Try cURL first, fallback to file_get_contents if not available
+        if (function_exists('curl_init')) {
+            return $this->makeRequestCurl($url, $params, $method);
+        } else {
+            logMessage('cURL not available, using file_get_contents fallback', 'INFO');
+            return $this->makeRequestStreams($url, $params, $method);
         }
-        
+    }
+
+    private function makeRequestCurl($url, $params = [], $method = 'GET') {
         $ch = curl_init();
-        
+
         if ($method === 'POST') {
             curl_setopt($ch, CURLOPT_POST, true);
             curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query($params));
@@ -254,37 +258,106 @@ class SynologyAPI {
             $url .= '?' . http_build_query($params);
             curl_setopt($ch, CURLOPT_URL, $url);
         }
-        
+
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
         curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
         curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
         curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
         curl_setopt($ch, CURLOPT_TIMEOUT, 30);
-        
+
         logMessage("Making $method request to: $url", 'DEBUG');
-        
+
         $response = curl_exec($ch);
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         $error = curl_error($ch);
-        
+
         curl_close($ch);
-        
+
         if ($error) {
             logMessage("CURL Error: $error", 'ERROR');
             throw new Exception("CURL Error: $error");
         }
-        
+
         if ($httpCode !== 200) {
             logMessage("HTTP Error: $httpCode, Response: " . substr($response, 0, 200), 'ERROR');
             throw new Exception("HTTP Error: $httpCode");
         }
-        
+
         $decoded = json_decode($response, true);
         if (json_last_error() !== JSON_ERROR_NONE) {
             logMessage("JSON decode error: " . json_last_error_msg(), 'ERROR');
             throw new Exception("JSON decode error: " . json_last_error_msg());
         }
-        
+
+        return $decoded;
+    }
+
+    private function makeRequestStreams($url, $params = [], $method = 'GET') {
+        // Fallback implementation using file_get_contents with stream contexts
+        logMessage("Making $method request to: $url using streams", 'DEBUG');
+
+        // Build the full URL
+        if ($method === 'GET' && !empty($params)) {
+            $url .= '?' . http_build_query($params);
+        }
+
+        // Create stream context for HTTPS requests
+        $contextOptions = [
+            'http' => [
+                'method' => $method,
+                'timeout' => 30,
+                'ignore_errors' => true, // Don't fail on HTTP error codes
+                'header' => [
+                    'User-Agent: PHP SynologyAPI',
+                    'Accept: application/json',
+                    'Content-Type: application/x-www-form-urlencoded'
+                ]
+            ],
+            'ssl' => [
+                'verify_peer' => false,
+                'verify_peer_name' => false
+            ]
+        ];
+
+        if ($method === 'POST') {
+            $contextOptions['http']['content'] = http_build_query($params);
+            $contextOptions['http']['header'][] = 'Content-Length: ' . strlen($contextOptions['http']['content']);
+        }
+
+        $context = stream_context_create($contextOptions);
+
+        // Make the request
+        $response = @file_get_contents($url, false, $context);
+
+        if ($response === false) {
+            $error = error_get_last();
+            $errorMsg = $error ? $error['message'] : 'Unknown stream error';
+            logMessage("Stream Error: $errorMsg", 'ERROR');
+            throw new Exception("Stream Error: $errorMsg");
+        }
+
+        // Get HTTP status code from headers
+        $httpCode = 200; // Default
+        if (isset($http_response_header) && is_array($http_response_header)) {
+            foreach ($http_response_header as $header) {
+                if (preg_match('/^HTTP\/\d+\.\d+\s+(\d+)/', $header, $matches)) {
+                    $httpCode = (int)$matches[1];
+                    break;
+                }
+            }
+        }
+
+        if ($httpCode !== 200) {
+            logMessage("HTTP Error: $httpCode, Response: " . substr($response, 0, 200), 'ERROR');
+            throw new Exception("HTTP Error: $httpCode");
+        }
+
+        $decoded = json_decode($response, true);
+        if (json_last_error() !== JSON_ERROR_NONE) {
+            logMessage("JSON decode error: " . json_last_error_msg(), 'ERROR');
+            throw new Exception("JSON decode error: " . json_last_error_msg());
+        }
+
         return $decoded;
     }
     
