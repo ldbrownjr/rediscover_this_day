@@ -1,0 +1,25 @@
+# Configuration files with sensitive data
+config/config.json
+
+# Cache files
+cache/photos.json
+cache/*.jpg
+cache/*.jpeg
+cache/*.png
+
+# Log files
+logs/*.log
+
+# Admin session data
+admin/sessions.json
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~

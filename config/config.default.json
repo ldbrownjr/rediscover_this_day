@@ -1,0 +1,19 @@
+{
+  "synology": {
+    "url": "",
+    "username": "",
+    "password": ""
+  },
+  "photos": {
+    "first_year": 2010
+  },
+  "slideshow": {
+    "duration": 5,
+    "transition": "fade",
+    "refresh_time": "00:00"
+  },
+  "admin": {
+    "username": "admin",
+    "password_hash": "$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi"
+  }
+}
