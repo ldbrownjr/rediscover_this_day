@@ -1,9 +1,9 @@
 # Enable URL rewriting (if mod_rewrite is available)
 <IfModule mod_rewrite.c>
     RewriteEngine On
-    RewriteBase /
     
-    # Redirect /admin to /admin/ (with trailing slash)
+    # Redirect admin (without trailing slash) to admin/ (with trailing slash)
+    # This keeps it relative to the current directory
     RewriteRule ^admin$ admin/ [R=301,L]
 </IfModule>
 
