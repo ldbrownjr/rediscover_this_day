@@ -37,9 +37,9 @@ class SynologyAPI {
         // Get current server IP
         $currentServer = $_SERVER['SERVER_ADDR'] ?? $_SERVER['LOCAL_ADDR'] ?? gethostbyname(gethostname());
         
-        // If we're running on the NAS (same IP), use localhost and HTTP
+        // If we're running on the NAS (same IP), use localhost but keep HTTPS
         if ($targetHost === $currentServer) {
-            $this->baseUrl = str_replace('https://' . $targetHost, 'http://localhost', $this->baseUrl);
+            $this->baseUrl = str_replace('https://' . $targetHost, 'https://localhost', $this->baseUrl);
             logMessage('Adjusted Synology API URL for local access: ' . $this->baseUrl, 'INFO');
         }
     }
