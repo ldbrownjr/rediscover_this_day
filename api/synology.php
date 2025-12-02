@@ -33,45 +33,12 @@ class SynologyAPI {
         }
         
         $targetHost = $parsedUrl['host'];
-        
-        // Get current server IP
         $currentServer = $_SERVER['SERVER_ADDR'] ?? $_SERVER['LOCAL_ADDR'] ?? gethostbyname(gethostname());
         
-        // If we're running on the NAS (same IP), try different local access methods
+        // If we're running on the same machine as the target, use localhost
         if ($targetHost === $currentServer) {
-            // Try localhost first
-            $localUrl = str_replace('https://' . $targetHost, 'https://localhost', $this->baseUrl);
-            
-            // Test if localhost works
-            if ($this->testLocalConnection($localUrl)) {
-                $this->baseUrl = $localUrl;
-                logMessage('Using localhost for Synology API access: ' . $this->baseUrl, 'INFO');
-                return;
-            }
-            
-            // If localhost doesn't work, try 127.0.0.1
-            $localUrl = str_replace('https://' . $targetHost, 'https://127.0.0.1', $this->baseUrl);
-            if ($this->testLocalConnection($localUrl)) {
-                $this->baseUrl = $localUrl;
-                logMessage('Using 127.0.0.1 for Synology API access: ' . $this->baseUrl, 'INFO');
-                return;
-            }
-            
-            // If neither works, log the issue but keep original URL
-            logMessage('Local access to Synology API failed, using external URL: ' . $this->baseUrl, 'WARNING');
-        }
-    }
-    
-    /**
-     * Test if we can connect to a local URL
-     */
-    private function testLocalConnection($url) {
-        try {
-            $client = new \GuzzleHttp\Client(['timeout' => 3, 'verify' => false]);
-            $response = $client->get($url . '/webapi/query.cgi?api=SYNO.API.Info&version=1&method=query&query=SYNO.API.Auth');
-            return $response->getStatusCode() === 200;
-        } catch (\Exception $e) {
-            return false;
+            $this->baseUrl = str_replace('https://' . $targetHost, 'https://localhost', $this->baseUrl);
+            logMessage('Adjusted Synology API URL for local access: ' . $this->baseUrl, 'INFO');
         }
     }
     
