@@ -78,10 +78,14 @@ class SynologyAPI {
      * Returns all photos taken on the specified month and day across all years
      */
     public function searchPhotosByDate($month, $day, $firstYear = null) {
+        logMessage("searchPhotosByDate called with month={$month}, day={$day}, firstYear={$firstYear}", 'INFO');
+        
         if (!$this->sid && !$this->login()) {
-            logMessage('Failed to login to Synology API', 'ERROR');
+            logMessage('Failed to login to Synology API in searchPhotosByDate', 'ERROR');
             return [];
         }
+        
+        logMessage("Logged in successfully, SID: " . substr($this->sid, 0, 10) . "...", 'INFO');
         
         $allPhotos = [];
         
@@ -89,17 +93,30 @@ class SynologyAPI {
         $currentYear = (int)date('Y');
         $startYear = $firstYear ? $firstYear : 2000;
         
+        logMessage("Searching year range: {$startYear} to {$currentYear} (total: " . ($currentYear - $startYear + 1) . " years)", 'INFO');
+        
         for ($year = $startYear; $year <= $currentYear; $year++) {
+            logMessage("Querying year {$year} for date {$month}/{$day}...", 'INFO');
             $photos = $this->getPhotosForSpecificDate($year, $month, $day);
+            
             if ($photos) {
+                $photoCount = count($photos);
+                logMessage("Found {$photoCount} photos for {$month}/{$day}/{$year}", 'INFO');
                 $allPhotos = array_merge($allPhotos, $photos);
+            } else {
+                logMessage("No photos found for {$month}/{$day}/{$year}", 'INFO');
             }
         }
+        
+        $totalPhotos = count($allPhotos);
+        logMessage("Year-by-year search complete. Total photos found: {$totalPhotos}", 'INFO');
         
         // Sort by capture date (oldest first)
         usort($allPhotos, function($a, $b) {
             return $a['time'] - $b['time'];
         });
+        
+        logMessage("Photos sorted by capture date (oldest to newest)", 'INFO');
         
         return $allPhotos;
     }
@@ -112,24 +129,43 @@ class SynologyAPI {
         $startTimestamp = mktime(0, 0, 0, $month, $day, $year);
         $endTimestamp = mktime(23, 59, 59, $month, $day, $year);
         
+        logMessage("getPhotosForSpecificDate: {$year}-{$month}-{$day}, timestamps: {$startTimestamp} to {$endTimestamp}", 'INFO');
+        logMessage("Date range: " . date('Y-m-d H:i:s', $startTimestamp) . " to " . date('Y-m-d H:i:s', $endTimestamp), 'INFO');
+        
         $url = $this->baseUrl . '/photo/webapi/entry.cgi';
+
+        $additionals = ['thumbnail', 'address', 'resolution', 'orientation', 'folder', 'video_convert', 'video_meta', 'tag'];
+        $additional = str_replace("'", '"', str_replace(' ', '', json_encode($additionals)));
         
         $params = [
-            'api' => 'SYNO.Foto.Browse.Item',
-            'version' => '1',
+            'api' => 'SYNO.FotoTeam.Browse.Item',
+            'version' => '3',
             'method' => 'list',
             'offset' => '0',
             'limit' => '5000',
             '_sid' => $this->sid,
-            'additional' => '["thumbnail","resolution","orientation"]',
+            'additional' => $additional,
             'start_time' => $startTimestamp,
             'end_time' => $endTimestamp
         ];
         
+        logMessage("API Request URL: {$url}", 'INFO');
+        logMessage("API Request params: " . json_encode($params), 'INFO');
+        
         $response = $this->makeRequest($url, $params);
         
+        logMessage("API Response received: " . json_encode($response), 'INFO');
+        
         if ($response && isset($response['success']) && $response['success']) {
-            return isset($response['data']['list']) ? $response['data']['list'] : [];
+            $photos = isset($response['data']['list']) ? $response['data']['list'] : [];
+            logMessage("API call successful, returned " . count($photos) . " photos", 'INFO');
+            return $photos;
+        }
+        
+        if ($response) {
+            logMessage("API call failed or returned unsuccessful response: " . json_encode($response), 'WARNING');
+        } else {
+            logMessage("API call returned null/empty response", 'WARNING');
         }
         
         return [];
@@ -140,7 +176,7 @@ class SynologyAPI {
      */
     public function getThumbnailUrl($photoId, $cacheKey, $size = 'xl') {
         return $this->baseUrl . '/photo/webapi/entry.cgi?' . http_build_query([
-            'api' => 'SYNO.Foto.Thumbnail',
+            'api' => 'SYNO.FotoTeam.Thumbnail',
             'version' => '1',
             'method' => 'get',
             'id' => $photoId,
@@ -176,7 +212,7 @@ class SynologyAPI {
      */
     public function downloadFullPhoto($photoId, $cacheKey) {
         $url = $this->baseUrl . '/photo/webapi/entry.cgi?' . http_build_query([
-            'api' => 'SYNO.Foto.Download',
+            'api' => 'SYNO.FotoTeam.Download',
             'version' => '1',
             'method' => 'download',
             'unit_id' => '[' . $photoId . ']',

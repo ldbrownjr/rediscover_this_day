@@ -50,22 +50,22 @@ body {
 .admin-container {
     max-width: 1200px;
     margin: 0 auto;
-    padding: 20px;
+    padding: 15px;
 }
 
 .admin-header {
     background: #2c3e50;
     color: #fff;
-    padding: 20px 30px;
+    padding: 15px 20px;
     border-radius: 8px;
-    margin-bottom: 30px;
+    margin-bottom: 20px;
     display: flex;
     justify-content: space-between;
     align-items: center;
 }
 
 .admin-header h1 {
-    font-size: 24px;
+    font-size: 20px;
 }
 
 .header-actions {
@@ -106,7 +106,25 @@ body {
 .admin-content {
     display: flex;
     flex-direction: column;
-    gap: 20px;
+    gap: 15px;
+}
+
+.admin-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 15px;
+}
+
+@media (max-width: 768px) {
+    .admin-grid {
+        grid-template-columns: 1fr;
+        gap: 10px;
+    }
+    
+    .form-row {
+        grid-template-columns: 1fr;
+        gap: 10px;
+    }
 }
 
 .admin-section {
@@ -114,6 +132,10 @@ body {
     padding: 30px;
     border-radius: 8px;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.admin-section.compact {
+    padding: 20px;
 }
 
 .admin-section h2 {
@@ -124,16 +146,43 @@ body {
     padding-bottom: 10px;
 }
 
+.admin-section.compact h3 {
+    font-size: 16px;
+    margin-bottom: 15px;
+    color: #2c3e50;
+    font-weight: 600;
+    border-bottom: 1px solid #ddd;
+    padding-bottom: 8px;
+}
+
 /* Forms */
 .form-group {
-    margin-bottom: 20px;
+    margin-bottom: 15px;
+}
+
+.form-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 15px;
+}
+
+.form-row .form-group {
+    margin-bottom: 0;
+}
+
+.form-actions {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    margin-top: 15px;
 }
 
 .form-group label {
     display: block;
-    margin-bottom: 8px;
+    margin-bottom: 5px;
     font-weight: 600;
     color: #2c3e50;
+    font-size: 14px;
 }
 
 .form-group input[type="text"],
@@ -142,9 +191,9 @@ body {
 .form-group input[type="time"],
 .form-group select {
     width: 100%;
-    padding: 10px 15px;
+    padding: 8px 12px;
     border: 1px solid #ddd;
-    border-radius: 5px;
+    border-radius: 4px;
     font-size: 14px;
     transition: border-color 0.2s;
 }
@@ -157,9 +206,9 @@ body {
 
 .form-group small {
     display: block;
-    margin-top: 5px;
+    margin-top: 3px;
     color: #7f8c8d;
-    font-size: 13px;
+    font-size: 12px;
 }
 
 /* Buttons */
@@ -173,6 +222,12 @@ body {
     text-decoration: none;
     display: inline-block;
     transition: all 0.2s;
+}
+
+.btn-sm {
+    padding: 6px 12px;
+    font-size: 13px;
+    font-weight: 500;
 }
 
 .btn-primary {
@@ -198,6 +253,14 @@ button[type="submit"] {
 }
 
 /* Status Info */
+.status-info {
+    margin-bottom: 15px;
+}
+
+.status-info p {
+    margin: 5px 0;
+    font-size: 14px;
+}
 .status-info {
     background: #ecf0f1;
     padding: 15px 20px;

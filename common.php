@@ -44,6 +44,27 @@ function saveConfig($config) {
  * Log message to file
  */
 function logMessage($message, $level = 'INFO') {
+    // Define log levels in order of verbosity
+    $logLevels = [
+        'ERROR' => 1,
+        'WARNING' => 2,
+        'INFO' => 3,
+        'DEBUG' => 4
+    ];
+    
+    // Get configured log level
+    $config = loadConfig();
+    $configuredLevel = isset($config['debug']['log_level']) ? $config['debug']['log_level'] : 'INFO';
+    
+    // Check if this message should be logged
+    if (!isset($logLevels[$level]) || !isset($logLevels[$configuredLevel])) {
+        return; // Invalid level
+    }
+    
+    if ($logLevels[$level] > $logLevels[$configuredLevel]) {
+        return; // Message level is higher than configured level
+    }
+    
     $timestamp = date('Y-m-d H:i:s');
     $logFile = LOG_PATH . '/app.log';
     $logEntry = "[$timestamp] [$level] $message\n";
