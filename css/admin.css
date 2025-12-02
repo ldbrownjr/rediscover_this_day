@@ -184,6 +184,19 @@ body {
     justify-content: center;
 }
 
+.password-section {
+    margin-top: 30px;
+    max-width: 600px;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+.empty-section {
+    background: transparent !important;
+    box-shadow: none !important;
+    border: 1px dashed #ddd;
+}
+
 .form-group label {
     display: block;
     margin-bottom: 5px;

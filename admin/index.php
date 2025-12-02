@@ -156,8 +156,25 @@ $lastRefresh = getLastRefreshInfo();
         
         <form method="POST" action="index.php">
         <div class="admin-content">
-            <!-- Top Row: Connection and Photo Settings -->
+            <!-- Top Row: Status and Synology Connection -->
             <div class="admin-grid">
+                <!-- Status -->
+                <section class="admin-section compact">
+                    <h3>Status</h3>
+                    <div class="status-info">
+                        <?php if ($lastRefresh): ?>
+                            <p><strong>Last:</strong> <?php echo h($lastRefresh['formatted']); ?></p>
+                            <p><strong>Photos:</strong> <?php echo h($lastRefresh['count']); ?></p>
+                        <?php else: ?>
+                            <p><em>No photos cached</em></p>
+                        <?php endif; ?>
+                    </div>
+                    
+                    <div class="form-actions">
+                        <button type="submit" name="refresh_now" class="btn btn-secondary btn-sm">Refresh Now</button>
+                    </div>
+                </section>
+                
                 <!-- Synology Connection Settings -->
                 <section class="admin-section compact">
                     <h3>Synology Connection</h3>
@@ -187,7 +204,10 @@ $lastRefresh = getLastRefreshInfo();
                         <button type="submit" name="test_connection" class="btn btn-secondary btn-sm">Test Connection</button>
                     </div>
                 </section>
-                
+            </div>
+            
+            <!-- Middle Row: Photo Settings and Slideshow -->
+            <div class="admin-grid">
                 <!-- Photo Settings -->
                 <section class="admin-section compact">
                     <h3>Photo Settings</h3>
@@ -199,10 +219,7 @@ $lastRefresh = getLastRefreshInfo();
                                min="1900" max="<?php echo date('Y'); ?>">
                     </div>
                 </section>
-            </div>
-            
-            <!-- Middle Row: Slideshow and Security -->
-            <div class="admin-grid">
+                
                 <!-- Slideshow Settings -->
                 <section class="admin-section compact">
                     <h3>Slideshow</h3>
@@ -230,88 +247,28 @@ $lastRefresh = getLastRefreshInfo();
                                value="<?php echo h($config['slideshow']['refresh_time']); ?>">
                     </div>
                 </section>
-                        
-                        <div class="form-group">
-                            <label for="refresh_time">Refresh Time:</label>
-                            <input type="time" id="refresh_time" name="refresh_time" 
-                                   value="<?php echo h($config['slideshow']['refresh_time']); ?>">
-                        </div>
-                        
-                        <button type="submit" class="btn btn-primary btn-sm">Save</button>
-                    </form>
-                </section>
-                
-                <!-- Admin Security -->
-                <section class="admin-section compact">
-                    <h3>Admin Password</h3>
-                    <form method="POST" action="index.php">
-                        <input type="hidden" name="action" value="change_password">
-                        
-                        <div class="form-group">
-                            <label for="current_password">Current:</label>
-                            <input type="password" id="current_password" name="current_password" required>
-                        </div>
-                        
-                        <div class="form-row">
-                            <div class="form-group">
-                                <label for="new_password">New:</label>
-                                <input type="password" id="new_password" name="new_password" required>
-                            </div>
-                            
-                            <div class="form-group">
-                                <label for="confirm_password">Confirm:</label>
-                                <input type="password" id="confirm_password" name="confirm_password" required>
-                            </div>
-                        </div>
-                        
-                        <button type="submit" class="btn btn-primary btn-sm">Change</button>
-                    </form>
-                </section>
             </div>
             
-            <!-- Bottom Row: Status and Debug -->
+            <!-- Bottom Row: Debug Settings -->
             <div class="admin-grid">
-                <!-- Status -->
-                <section class="admin-section compact">
-                    <h3>Status</h3>
-                    <div class="status-info">
-                        <?php if ($lastRefresh): ?>
-                            <p><strong>Last:</strong> <?php echo h($lastRefresh['formatted']); ?></p>
-                            <p><strong>Photos:</strong> <?php echo h($lastRefresh['count']); ?></p>
-                        <?php else: ?>
-                            <p><em>No photos cached</em></p>
-                        <?php endif; ?>
-                    </div>
-                    
-                    <form method="POST" action="index.php">
-                        <input type="hidden" name="action" value="refresh_now">
-                        <button type="submit" class="btn btn-secondary btn-sm">Refresh Now</button>
-                    </form>
-                </section>
-                
                 <!-- Debug Settings -->
                 <section class="admin-section compact">
                     <h3>Debug</h3>
-                    <form method="POST" action="index.php">
-                        <input type="hidden" name="action" value="save_config">
-                        
-                        <!-- Copy other fields as hidden -->
-                        <input type="hidden" name="synology_url" value="<?php echo h($config['synology']['url']); ?>">
-                        <input type="hidden" name="synology_username" value="<?php echo h($config['synology']['username']); ?>">
-                        <input type="hidden" name="first_year" value="<?php echo h($config['photos']['first_year']); ?>">
-                        <input type="hidden" name="duration" value="<?php echo h($config['slideshow']['duration']); ?>">
-                        <input type="hidden" name="transition" value="<?php echo h($config['slideshow']['transition']); ?>">
-                        <input type="hidden" name="refresh_time" value="<?php echo h($config['slideshow']['refresh_time']); ?>">
-                        
-                        <div class="form-group">
-                            <label for="log_level">Log Level:</label>
-                            <select id="log_level" name="log_level">
-                                <option value="ERROR" <?php echo (isset($config['debug']['log_level']) && $config['debug']['log_level'] === 'ERROR') ? 'selected' : ''; ?>>ERROR</option>
-                                <option value="WARNING" <?php echo (isset($config['debug']['log_level']) && $config['debug']['log_level'] === 'WARNING') ? 'selected' : ''; ?>>WARNING</option>
-                                <option value="INFO" <?php echo (!isset($config['debug']['log_level']) || $config['debug']['log_level'] === 'INFO') ? 'selected' : ''; ?>>INFO</option>
-                                <option value="DEBUG" <?php echo (isset($config['debug']['log_level']) && $config['debug']['log_level'] === 'DEBUG') ? 'selected' : ''; ?>>DEBUG</option>
-                            </select>
-                        </div>
+                    
+                    <div class="form-group">
+                        <label for="log_level">Log Level:</label>
+                        <select id="log_level" name="log_level">
+                            <option value="ERROR" <?php echo (isset($config['debug']['log_level']) && $config['debug']['log_level'] === 'ERROR') ? 'selected' : ''; ?>>ERROR</option>
+                            <option value="WARNING" <?php echo (isset($config['debug']['log_level']) && $config['debug']['log_level'] === 'WARNING') ? 'selected' : ''; ?>>WARNING</option>
+                            <option value="INFO" <?php echo (!isset($config['debug']['log_level']) || $config['debug']['log_level'] === 'INFO') ? 'selected' : ''; ?>>INFO</option>
+                            <option value="DEBUG" <?php echo (isset($config['debug']['log_level']) && $config['debug']['log_level'] === 'DEBUG') ? 'selected' : ''; ?>>DEBUG</option>
+                        </select>
+                    </div>
+                </section>
+                
+                <!-- Empty space for balance -->
+                <section class="admin-section compact empty-section">
+                    <!-- Intentionally empty for layout balance -->
                 </section>
             </div>
             
@@ -319,6 +276,32 @@ $lastRefresh = getLastRefreshInfo();
             <div class="form-actions main-actions">
                 <button type="submit" name="save_config" class="btn btn-primary">Save All Settings</button>
             </div>
+            
+            <!-- Admin Password Section (Full Width at Bottom) -->
+            <section class="admin-section password-section">
+                <h3>Admin Password</h3>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="current_password">Current:</label>
+                        <input type="password" id="current_password" name="current_password">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="new_password">New:</label>
+                        <input type="password" id="new_password" name="new_password">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="confirm_password">Confirm:</label>
+                        <input type="password" id="confirm_password" name="confirm_password">
+                    </div>
+                </div>
+                
+                <div class="form-actions">
+                    <button type="submit" name="change_password" class="btn btn-primary btn-sm">Change Password</button>
+                </div>
+            </section>
         </div>
         </form>
     </div>
