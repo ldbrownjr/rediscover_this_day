@@ -15,8 +15,27 @@ define('CACHE_PATH', BASE_PATH . '/cache');
 define('LOG_PATH', BASE_PATH . '/logs');
 
 /**
- * Load configuration from JSON file
+ * Get the web base path (URL path from document root to application)
  */
+function getWebBasePath() {
+    $docRoot = realpath($_SERVER['DOCUMENT_ROOT']);
+    $appRoot = realpath(BASE_PATH);
+    
+    if ($docRoot && $appRoot && strpos($appRoot, $docRoot) === 0) {
+        $relativePath = str_replace($docRoot, '', $appRoot);
+        return str_replace('\\', '/', $relativePath); // Normalize for Windows
+    }
+    
+    // Fallback: try to determine from REQUEST_URI vs SCRIPT_NAME
+    $scriptName = $_SERVER['SCRIPT_NAME'] ?? '';
+    $requestUri = $_SERVER['REQUEST_URI'] ?? '';
+    
+    // Remove script name from request URI to get base path
+    $basePath = str_replace(dirname($scriptName), '', dirname($requestUri));
+    if ($basePath === '/') $basePath = '';
+    
+    return $basePath;
+}
 function loadConfig() {
     if (!file_exists(CONFIG_PATH)) {
         // Copy default config if config doesn't exist
@@ -83,7 +102,8 @@ function isAdminLoggedIn() {
  */
 function requireAdmin() {
     if (!isAdminLoggedIn()) {
-        header('Location: /admin/login.php');
+        $basePath = getWebBasePath();
+        header('Location: ' . $basePath . '/admin/login.php');
         exit;
     }
 }
