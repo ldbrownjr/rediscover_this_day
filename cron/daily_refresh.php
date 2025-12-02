@@ -117,10 +117,33 @@ function performDailyRefresh() {
             $downloadCount++;
             logMessage("Successfully downloaded photo {$photo['id']} as {$cachedFilename}", 'DEBUG');
             
-            // Extract location if available (from EXIF or metadata)
+            // Extract location from address data if available
             $location = null;
-            // Note: Location extraction would require additional API calls or EXIF data
-            // For now, we'll leave it as null
+            if (isset($photo['additional']['address'])) {
+                $address = $photo['additional']['address'];
+                $locationParts = [];
+                
+                // Build location string from available address components
+                if (!empty($address['route'])) {
+                    $locationParts[] = $address['route'];
+                }     
+                if (!empty($address['village'])) {
+                    $locationParts[] = $address['village'];
+                }           
+                if (!empty($address['city'])) {
+                    $locationParts[] = $address['city'];
+                }
+                if (!empty($address['state'])) {
+                    $locationParts[] = $address['state'];
+                }
+                if (!empty($address['country']) && $address['country'] !== 'United States') {
+                    $locationParts[] = $address['country'];
+                }
+                
+                if (!empty($locationParts)) {
+                    $location = implode(', ', $locationParts);
+                }
+            }
             
             // Store photo metadata
             $cachedPhotos[] = [

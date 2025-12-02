@@ -65,14 +65,16 @@
         
         // Set metadata
         var photoDate = new Date(photo.time * 1000);
-        yearSpan.textContent = photoDate.getFullYear();
+        var year = photoDate.getFullYear();
         
-        // Set location if available
-        if (photo.location) {
+        // Set year
+        yearSpan.textContent = year;
+        
+        // Set location (always show, display "Missing Location" if none available)
+        if (photo.location && photo.location.trim() !== '') {
             locationSpan.textContent = photo.location;
-            locationSpan.style.display = 'inline';
         } else {
-            locationSpan.style.display = 'none';
+            locationSpan.textContent = 'Missing Location';
         }
         
         // Preload next photo
