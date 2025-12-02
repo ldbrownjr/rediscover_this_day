@@ -83,8 +83,8 @@ function isAdminLoggedIn() {
  */
 function requireAdmin() {
     if (!isAdminLoggedIn()) {
-        // Use relative redirect for subdirectory installations
-        header('Location: admin/login.php');
+        // Use relative redirect within admin directory
+        header('Location: login.php');
         exit;
     }
 }
