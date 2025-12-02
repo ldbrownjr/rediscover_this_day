@@ -18,23 +18,32 @@ define('LOG_PATH', BASE_PATH . '/logs');
  * Get the web base path (URL path from document root to application)
  */
 function getWebBasePath() {
-    $docRoot = realpath($_SERVER['DOCUMENT_ROOT']);
-    $appRoot = realpath(BASE_PATH);
-    
-    if ($docRoot && $appRoot && strpos($appRoot, $docRoot) === 0) {
-        $relativePath = str_replace($docRoot, '', $appRoot);
-        return str_replace('\\', '/', $relativePath); // Normalize for Windows
+    // Simple approach: extract from current request
+    if (isset($_SERVER['REQUEST_URI']) && isset($_SERVER['SCRIPT_NAME'])) {
+        $scriptDir = dirname($_SERVER['SCRIPT_NAME']);
+        $requestDir = dirname($_SERVER['REQUEST_URI']);
+        
+        // Find the common base path
+        $scriptParts = explode('/', trim($scriptDir, '/'));
+        $requestParts = explode('/', trim($requestDir, '/'));
+        
+        $baseParts = [];
+        $maxLen = min(count($scriptParts), count($requestParts));
+        
+        for ($i = 0; $i < $maxLen; $i++) {
+            if ($scriptParts[$i] === $requestParts[$i]) {
+                $baseParts[] = $scriptParts[$i];
+            } else {
+                break;
+            }
+        }
+        
+        $basePath = '/' . implode('/', $baseParts);
+        return $basePath === '/' ? '' : $basePath;
     }
     
-    // Fallback: try to determine from REQUEST_URI vs SCRIPT_NAME
-    $scriptName = $_SERVER['SCRIPT_NAME'] ?? '';
-    $requestUri = $_SERVER['REQUEST_URI'] ?? '';
-    
-    // Remove script name from request URI to get base path
-    $basePath = str_replace(dirname($scriptName), '', dirname($requestUri));
-    if ($basePath === '/') $basePath = '';
-    
-    return $basePath;
+    // Fallback: return empty (assume root installation)
+    return '';
 }
 function loadConfig() {
     if (!file_exists(CONFIG_PATH)) {
@@ -102,8 +111,13 @@ function isAdminLoggedIn() {
  */
 function requireAdmin() {
     if (!isAdminLoggedIn()) {
-        $basePath = getWebBasePath();
-        header('Location: ' . $basePath . '/admin/login.php');
+        try {
+            $basePath = getWebBasePath();
+            header('Location: ' . $basePath . '/admin/login.php');
+        } catch (Exception $e) {
+            // Fallback to relative redirect if getWebBasePath fails
+            header('Location: login.php');
+        }
         exit;
     }
 }

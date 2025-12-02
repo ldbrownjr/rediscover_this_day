@@ -17,6 +17,11 @@ if (ini_get("session.use_cookies")) {
 session_destroy();
 
 // Redirect to the admin login page
-$basePath = getWebBasePath();
-header('Location: ' . $basePath . '/admin/login.php');
+try {
+    $basePath = getWebBasePath();
+    header('Location: ' . $basePath . '/admin/login.php');
+} catch (Exception $e) {
+    // Fallback to relative redirect if getWebBasePath fails
+    header('Location: login.php');
+}
 exit;
