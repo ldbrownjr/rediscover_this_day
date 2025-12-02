@@ -4,6 +4,9 @@
  * Based on: https://github.com/zeichensatz/SynologyPhotosAPI
  */
 
+// Load Composer autoload
+require_once __DIR__ . '/../vendor/autoload.php';
+
 class SynologyAPI {
     private $baseUrl;
     private $username;
@@ -235,155 +238,84 @@ class SynologyAPI {
     }
     
     /**
-     * Make HTTP request
+     * Make HTTP request using Guzzle
      */
     private function makeRequest($url, $params = [], $method = 'GET') {
-        // Try cURL first, fallback to file_get_contents if not available
-        if (function_exists('curl_init')) {
-            return $this->makeRequestCurl($url, $params, $method);
-        } else {
-            logMessage('cURL not available, using file_get_contents fallback', 'INFO');
-            return $this->makeRequestStreams($url, $params, $method);
-        }
-    }
-
-    private function makeRequestCurl($url, $params = [], $method = 'GET') {
-        $ch = curl_init();
-
-        if ($method === 'POST') {
-            curl_setopt($ch, CURLOPT_POST, true);
-            curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query($params));
-            curl_setopt($ch, CURLOPT_URL, $url);
-        } else {
-            $url .= '?' . http_build_query($params);
-            curl_setopt($ch, CURLOPT_URL, $url);
-        }
-
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
-        curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
-        curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
-        curl_setopt($ch, CURLOPT_TIMEOUT, 30);
-
-        logMessage("Making $method request to: $url", 'DEBUG');
-
-        $response = curl_exec($ch);
-        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        $error = curl_error($ch);
-
-        curl_close($ch);
-
-        if ($error) {
-            logMessage("CURL Error: $error", 'ERROR');
-            throw new Exception("CURL Error: $error");
-        }
-
-        if ($httpCode !== 200) {
-            logMessage("HTTP Error: $httpCode, Response: " . substr($response, 0, 200), 'ERROR');
-            throw new Exception("HTTP Error: $httpCode");
-        }
-
-        $decoded = json_decode($response, true);
-        if (json_last_error() !== JSON_ERROR_NONE) {
-            logMessage("JSON decode error: " . json_last_error_msg(), 'ERROR');
-            throw new Exception("JSON decode error: " . json_last_error_msg());
-        }
-
-        return $decoded;
-    }
-
-    private function makeRequestStreams($url, $params = [], $method = 'GET') {
-        // Fallback implementation using file_get_contents with stream contexts
-        logMessage("Making $method request to: $url using streams", 'DEBUG');
-
-        // Build the full URL
-        if ($method === 'GET' && !empty($params)) {
-            $url .= '?' . http_build_query($params);
-        }
-
-        // Create stream context for HTTPS requests
-        $contextOptions = [
-            'http' => [
-                'method' => $method,
+        try {
+            // Create Guzzle client with custom configuration
+            $client = new \GuzzleHttp\Client([
                 'timeout' => 30,
-                'ignore_errors' => true, // Don't fail on HTTP error codes
-                'header' => [
-                    'User-Agent: PHP SynologyAPI',
-                    'Accept: application/json',
-                    'Content-Type: application/x-www-form-urlencoded'
+                'verify' => false, // Disable SSL verification like the original cURL code
+                'allow_redirects' => true,
+                'headers' => [
+                    'User-Agent' => 'PHP SynologyAPI',
+                    'Accept' => 'application/json',
                 ]
-            ],
-            'ssl' => [
-                'verify_peer' => false,
-                'verify_peer_name' => false
-            ]
-        ];
+            ]);
 
-        if ($method === 'POST') {
-            $contextOptions['http']['content'] = http_build_query($params);
-            $contextOptions['http']['header'][] = 'Content-Length: ' . strlen($contextOptions['http']['content']);
-        }
+            logMessage("Making $method request to: $url", 'DEBUG');
 
-        $context = stream_context_create($contextOptions);
-
-        // Make the request
-        $response = @file_get_contents($url, false, $context);
-
-        if ($response === false) {
-            $error = error_get_last();
-            $errorMsg = $error ? $error['message'] : 'Unknown stream error';
-            logMessage("Stream Error: $errorMsg", 'ERROR');
-            throw new Exception("Stream Error: $errorMsg");
-        }
-
-        // Get HTTP status code from headers
-        $httpCode = 200; // Default
-        if (isset($http_response_header) && is_array($http_response_header)) {
-            foreach ($http_response_header as $header) {
-                if (preg_match('/^HTTP\/\d+\.\d+\s+(\d+)/', $header, $matches)) {
-                    $httpCode = (int)$matches[1];
-                    break;
-                }
+            // Make the request
+            $options = [];
+            if ($method === 'POST') {
+                $options['form_params'] = $params;
+            } elseif ($method === 'GET' && !empty($params)) {
+                $options['query'] = $params;
             }
-        }
 
-        if ($httpCode !== 200) {
-            logMessage("HTTP Error: $httpCode, Response: " . substr($response, 0, 200), 'ERROR');
-            throw new Exception("HTTP Error: $httpCode");
-        }
+            $response = $client->request($method, $url, $options);
 
-        $decoded = json_decode($response, true);
-        if (json_last_error() !== JSON_ERROR_NONE) {
-            logMessage("JSON decode error: " . json_last_error_msg(), 'ERROR');
-            throw new Exception("JSON decode error: " . json_last_error_msg());
-        }
+            // Get response body
+            $body = $response->getBody()->getContents();
 
-        return $decoded;
+            // Check for successful response
+            $statusCode = $response->getStatusCode();
+            if ($statusCode !== 200) {
+                logMessage("HTTP Error: $statusCode, Response: " . substr($body, 0, 200), 'ERROR');
+                throw new Exception("HTTP Error: $statusCode");
+            }
+
+            // Parse JSON response
+            $decoded = json_decode($body, true);
+            if (json_last_error() !== JSON_ERROR_NONE) {
+                logMessage("JSON decode error: " . json_last_error_msg(), 'ERROR');
+                throw new Exception("JSON decode error: " . json_last_error_msg());
+            }
+
+            return $decoded;
+
+        } catch (\GuzzleHttp\Exception\RequestException $e) {
+            $errorMsg = $e->getMessage();
+            logMessage("Guzzle Request Error: $errorMsg", 'ERROR');
+            throw new Exception("Request Error: $errorMsg");
+        } catch (\GuzzleHttp\Exception\ConnectException $e) {
+            $errorMsg = $e->getMessage();
+            logMessage("Guzzle Connection Error: $errorMsg", 'ERROR');
+            throw new Exception("Connection Error: $errorMsg");
+        } catch (\Exception $e) {
+            $errorMsg = $e->getMessage();
+            logMessage("Guzzle Error: $errorMsg", 'ERROR');
+            throw new Exception("HTTP Error: $errorMsg");
+        }
     }
-    
+
     /**
      * Download file
      */
     private function downloadFile($url) {
-        $ch = curl_init();
-        
-        curl_setopt($ch, CURLOPT_URL, $url);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
-        curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
-        curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
-        curl_setopt($ch, CURLOPT_TIMEOUT, 60);
-        
-        $data = curl_exec($ch);
-        $error = curl_error($ch);
-        
-        curl_close($ch);
-        
-        if ($error) {
-            logMessage("Download Error: $error", 'ERROR');
+        try {
+            $client = new \GuzzleHttp\Client([
+                'timeout' => 60,
+                'verify' => false,
+                'allow_redirects' => true,
+            ]);
+
+            $response = $client->get($url);
+            return $response->getBody()->getContents();
+
+        } catch (\Exception $e) {
+            logMessage("Download Error: " . $e->getMessage(), 'ERROR');
             return null;
         }
-        
-        return $data;
     }
 }
