@@ -88,22 +88,47 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (empty($config['synology']['url']) || empty($config['synology']['username']) || empty($config['synology']['password'])) {
             $message = 'Please configure Synology connection settings first';
             $messageType = 'error';
+            logMessage('Test connection failed: missing configuration', 'ERROR');
         } else {
-            $api = new SynologyAPI(
-                $config['synology']['url'],
-                $config['synology']['username'],
-                $config['synology']['password']
-            );
-            
-            if ($api->testConnection()) {
-                $message = 'Connection successful!';
-                $messageType = 'success';
-                logMessage('Synology connection test successful', 'INFO');
-                $api->logout();
-            } else {
-                $message = 'Connection failed. Please check your settings.';
+            try {
+                logMessage('Testing connection to: ' . $config['synology']['url'], 'INFO');
+                
+                // Check if cURL is available
+                if (!function_exists('curl_init')) {
+                    $message = 'cURL extension is not available on this server';
+                    $messageType = 'error';
+                    logMessage('cURL extension not available', 'ERROR');
+                    return;
+                }
+                
+                // Check if SynologyAPI class exists
+                if (!class_exists('SynologyAPI')) {
+                    require_once '../api/synology.php';
+                    logMessage('Loaded SynologyAPI class', 'DEBUG');
+                }
+                
+                $api = new SynologyAPI(
+                    $config['synology']['url'],
+                    $config['synology']['username'],
+                    $config['synology']['password']
+                );
+                logMessage('SynologyAPI object created successfully', 'DEBUG');
+                
+                if ($api->testConnection()) {
+                    $message = 'Connection successful!';
+                    $messageType = 'success';
+                    logMessage('Synology connection test successful', 'INFO');
+                    $api->logout();
+                } else {
+                    $message = 'Connection failed. Please check your settings.';
+                    $messageType = 'error';
+                    logMessage('Synology connection test failed - testConnection returned false', 'ERROR');
+                }
+            } catch (Exception $e) {
+                $message = 'Connection test error: ' . $e->getMessage();
                 $messageType = 'error';
-                logMessage('Synology connection test failed', 'ERROR');
+                logMessage('Synology connection test exception: ' . $e->getMessage(), 'ERROR');
+                error_log('SynologyAPI test connection error: ' . $e->getMessage());
             }
         }
     }

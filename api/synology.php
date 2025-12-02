@@ -238,6 +238,12 @@ class SynologyAPI {
      * Make HTTP request
      */
     private function makeRequest($url, $params = [], $method = 'GET') {
+        // Check if cURL is available
+        if (!function_exists('curl_init')) {
+            logMessage('cURL extension is not available', 'ERROR');
+            throw new Exception('cURL extension is not available');
+        }
+        
         $ch = curl_init();
         
         if ($method === 'POST') {
@@ -255,6 +261,8 @@ class SynologyAPI {
         curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
         curl_setopt($ch, CURLOPT_TIMEOUT, 30);
         
+        logMessage("Making $method request to: $url", 'DEBUG');
+        
         $response = curl_exec($ch);
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         $error = curl_error($ch);
@@ -263,15 +271,21 @@ class SynologyAPI {
         
         if ($error) {
             logMessage("CURL Error: $error", 'ERROR');
-            return null;
+            throw new Exception("CURL Error: $error");
         }
         
         if ($httpCode !== 200) {
-            logMessage("HTTP Error: $httpCode", 'ERROR');
-            return null;
+            logMessage("HTTP Error: $httpCode, Response: " . substr($response, 0, 200), 'ERROR');
+            throw new Exception("HTTP Error: $httpCode");
         }
         
-        return json_decode($response, true);
+        $decoded = json_decode($response, true);
+        if (json_last_error() !== JSON_ERROR_NONE) {
+            logMessage("JSON decode error: " . json_last_error_msg(), 'ERROR');
+            throw new Exception("JSON decode error: " . json_last_error_msg());
+        }
+        
+        return $decoded;
     }
     
     /**
