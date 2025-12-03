@@ -70,6 +70,29 @@ Log in with default credentials and configure:
    - Password (your Synology account password)
    - Click "Test Connection" to verify
 
+   It is recomended to create a user specific for this application.
+   e.g. app_rtd
+   Then this user needs to be given necessary perimissions.
+
+   - Access to Synology Photos (error code 801 if not done)
+     - Sign in to as **admin**.
+     - Navigate to **Control Panel > User & Group**.
+     - Select the new user (e.g. app_rtd).
+     - Click on **Edit**.
+     - Go to **Applications** tab.
+     - Scroll down to Synology Photos and click the Allow checkbox.
+     - Click **Save**.
+   - Access to Team Photos (error code 801 if not done)
+     - Sign in to as **admin** and launch **Synology Photos App**.
+     - Select **User Profile** in upper right, then **Settings**.
+     - Select **Shared Space** tab.
+     - Click on **Set Access Permissions**.
+     - In Search box find user e.g. app_rtd
+       - Select **Full Access**. (error code 120 shows up if not Full Access)
+       - click **plus sign**.
+     - Select **Save**.
+     - Select **Save** again.
+
 2. **Photo Settings**:
 
    - First year to include (e.g., `2010`)
