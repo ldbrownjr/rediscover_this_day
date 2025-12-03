@@ -93,13 +93,13 @@ body {
 }
 
 #location {
-    font-size: 16px;
+    font-size: 18px;
     opacity: 0.9;
     line-height: 1.2;
 }
 
 #image-count {
-    font-size: 14px;
+    font-size: 18px;
     opacity: 0.8;
     line-height: 1.2;
     margin-top: 4px;
