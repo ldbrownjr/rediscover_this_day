@@ -9,7 +9,9 @@ if (session_status() === PHP_SESSION_NONE) {
 }
 
 // Define constants
-define('BASE_PATH', dirname(__FILE__));
+if (!defined('BASE_PATH')) {
+    define('BASE_PATH', dirname(__FILE__));
+}
 define('CONFIG_PATH', BASE_PATH . '/config/config.json');
 define('CACHE_PATH', BASE_PATH . '/cache');
 define('LOG_PATH', BASE_PATH . '/logs');
