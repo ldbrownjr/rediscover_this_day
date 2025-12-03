@@ -5,6 +5,26 @@
 - Synology NAS with Photos package installed
 - Access to Synology web directory or Web Station
 - SSH access (optional, for command line setup)
+- **PHP 7.0+ with cURL extension enabled**
+
+## PHP Requirements
+
+This application requires PHP with the following extensions:
+
+- **cURL extension** - Required for HTTP requests to Synology API
+- JSON extension (usually enabled by default)
+- File system functions enabled
+
+### Installing cURL Extension on Synology
+
+If you get connection errors, you may need to enable the cURL extension:
+
+1. Open **Synology DSM Control Panel**
+2. Go to **Web Station** → **PHP Settings**
+3. Select your PHP profile
+4. Check **cURL** in the extensions list
+5. Apply changes
+6. Restart Web Station
 
 ## Quick Start (5 minutes)
 
@@ -102,6 +122,7 @@ Your slideshow should now display photos from today's date in previous years.
 - Verify URL includes `https://` and correct port
 - Test URL in browser first
 - Check username/password
+- **Ensure cURL extension is enabled in PHP settings** (see PHP Requirements above)
 
 **Images not loading?**
 
