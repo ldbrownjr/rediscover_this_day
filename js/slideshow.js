@@ -29,6 +29,36 @@
     var duration = (config.duration || 5) * 1000;
     var transition = config.transition || 'fade';
     
+    // Polling for updates
+    var pollInterval = 5 * 60 * 1000; // 5 minutes
+    var pollTimer = null;
+    
+    /**
+     * Poll server for updated photos
+     */
+    function pollForUpdates() {
+        var xhr = new XMLHttpRequest();
+        xhr.open('GET', 'api/photos.php', true);
+        xhr.onreadystatechange = function() {
+            if (xhr.readyState === 4 && xhr.status === 200) {
+                try {
+                    var response = JSON.parse(xhr.responseText);
+                    if (response.success && response.photos && response.photos.length !== photos.length) {
+                        photos = response.photos;
+                        // If we have more photos and we're at the end, continue
+                        if (currentIndex >= photos.length) {
+                            currentIndex = photos.length - 1;
+                        }
+                        updatePhotoContent(photos[currentIndex]);
+                    }
+                } catch (e) {
+                    // Ignore parsing errors
+                }
+            }
+        };
+        xhr.send();
+    }
+    
     /**
      * Display photo at given index
      */
@@ -205,6 +235,9 @@
         
         // Start slideshow
         startSlideshow();
+        
+        // Start polling for updates
+        pollTimer = setInterval(pollForUpdates, pollInterval);
         
         // Event listeners
         prevBtn.addEventListener('click', function() {
