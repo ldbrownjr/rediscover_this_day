@@ -57,7 +57,7 @@ body {
     position: absolute;
     bottom: 80px;
     right: 20px;
-    background: rgba(0, 0, 0, 0.7);
+    background: rgba(0, 0, 0, 0.4);
     padding: 12px 18px;
     border-radius: 6px;
     font-size: 16px;
@@ -86,7 +86,7 @@ body {
     left: 50%;
     -webkit-transform: translateX(-50%);
     transform: translateX(-50%);
-    background: rgba(0, 0, 0, 0.7);
+    background: rgba(0, 0, 0, 0.4);
     padding: 15px 25px;
     border-radius: 50px;
     display: -webkit-box;
