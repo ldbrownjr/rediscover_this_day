@@ -18,6 +18,11 @@
     var photoImg = document.getElementById('current-photo');
     var yearSpan = document.getElementById('year');
     var locationSpan = document.getElementById('location');
+    var landmarkSpan = document.getElementById('landmark');
+    var routeSpan = document.getElementById('route');
+    var villageDistrictTownCitySpan = document.getElementById('village_district_town_city');
+    var countyStateSpan = document.getElementById('county_state');
+    var countrySpan = document.getElementById('country');
     var imageCountSpan = document.getElementById('image-count');
     var counter = document.getElementById('counter');
     var controls = document.getElementById('controls');
@@ -102,11 +107,34 @@
         yearSpan.textContent = year;
         
         // Set location (always show, display "Missing Location" if none available)
-        if (photo.location && photo.location.trim() !== '') {
-            locationSpan.textContent = photo.location;
+        const hasLocationData = (
+            (photo.landmark && photo.landmark.trim() !== '') ||
+            (photo.route && photo.route.trim() !== '') ||
+            (photo.village_district_town_city && photo.village_district_town_city.trim() !== '') ||
+            (photo.county_state && photo.county_state.trim() !== '') ||
+            (photo.country && photo.country.trim() !== '')
+        );
+
+        if (!hasLocationData) {
+            locationSpan.textContent = 'Location Missing';
         } else {
-            locationSpan.textContent = 'Missing Location';
+            locationSpan.textContent = '';
         }
+
+        // Set landmark
+        landmarkSpan.textContent = photo.landmark || '';
+
+        // Set route
+        routeSpan.textContent = photo.route || '';
+
+        // Set village/district/town/city
+        villageDistrictTownCitySpan.textContent = photo.village_district_town_city || '';
+
+        // Set county/state
+        countyStateSpan.textContent = photo.county_state || '';
+
+        // Set country
+        countrySpan.textContent = photo.country || '';
         
         // Set image count (e.g., "5 of 85")
         var currentNumber = currentIndex + 1;

@@ -117,31 +117,50 @@ function performDailyRefresh() {
             $downloadCount++;
             logMessage("Successfully downloaded photo {$photo['id']} as {$cachedFilename}", 'DEBUG');
             
-            // Extract location from address data if available
-            $location = null;
+            // Extract location data from address data if available
+            $landmark = null;
+            $route = null;
+            $villageDistrictTownCity = null;
+            $countyState = null;
+            $country = null;
             if (isset($photo['additional']['address'])) {
                 $address = $photo['additional']['address'];
-                $locationParts = [];
+                $villageDistrictTownCityParts = [];
+                $countyStateParts = [];
                 
                 // Build location string from available address components
+                if (!empty($address['landmark'])) {
+                    $landmark[] = $address['landmark'];
+                }
                 if (!empty($address['route'])) {
-                    $locationParts[] = $address['route'];
+                    $route = $address['route'];
                 }     
                 if (!empty($address['village'])) {
-                    $locationParts[] = $address['village'];
-                }           
+                    $villageDistrictTownCityParts[] = $address['village'];
+                }
+                if (!empty($address['district'])) {
+                    $villageDistrictTownCityParts[] = $address['district'];
+                }
+                if (!empty($address['town'])) {
+                    $villageDistrictTownCityParts[] = $address['town'];
+                }
                 if (!empty($address['city'])) {
-                    $locationParts[] = $address['city'];
+                    $villageDistrictTownCityParts[] = $address['city'];
+                }
+                if (!empty($address['county'])) {
+                    $countyStateParts[] = $address['county'];
                 }
                 if (!empty($address['state'])) {
-                    $locationParts[] = $address['state'];
+                    $countyStateParts[] = $address['state'];
                 }
                 if (!empty($address['country']) && $address['country'] !== 'United States') {
-                    $locationParts[] = $address['country'];
+                    $country = $address['country'];
                 }
-                
-                if (!empty($locationParts)) {
-                    $location = implode(', ', $locationParts);
+                if (!empty($villageDistrictTownCityParts)) {
+                    $villageDistrictTownCity = implode(', ', $villageDistrictTownCityParts);
+                }
+                if (!empty($countyStateParts)) {
+                    $countyState = implode(', ', $countyStateParts);
                 }
             }
             
@@ -152,7 +171,11 @@ function performDailyRefresh() {
                 'time' => $photo['time'],
                 'year' => date('Y', $photo['time']),
                 'cached_filename' => $cachedFilename,
-                'location' => $location
+                'landmark' => $landmark,
+                'route' => $route,
+                'village_district_town_city' => $villageDistrictTownCity,
+                'county_state' => $countyState,
+                'country' => $country
             ];
         } else {
             logMessage("Failed to download photo {$photo['id']} - downloadThumbnail returned null", 'WARNING');

@@ -28,6 +28,11 @@ $config = loadConfig();
                 <div id="metadata">
                     <span id="year"></span>
                     <span id="location"></span>
+                    <span id="landmark"></span>
+                    <span id="route"></span>
+                    <span id="village_district_town_city"></span>
+                    <span id="county_state"></span>
+                    <span id="country"></span>
                     <span id="image-count"></span>
                 </div>
             </div>

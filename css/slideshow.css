@@ -92,7 +92,7 @@ body {
     line-height: 1.2;
 }
 
-#location {
+#location, #landmark, #route, #village_district_town_city, #county_state, #country {
     font-size: 18px;
     opacity: 0.9;
     line-height: 1.2;
