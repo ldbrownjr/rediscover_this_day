@@ -92,7 +92,37 @@ body {
     line-height: 1.2;
 }
 
-#location, #landmark, #route, #village_district_town_city, #county_state, #country {
+#location {
+    font-size: 18px;
+    opacity: 0.9;
+    line-height: 1.2;
+}
+
+#landmark {
+    font-size: 18px;
+    opacity: 0.9;
+    line-height: 1.2;
+}
+
+#route {
+    font-size: 18px;
+    opacity: 0.9;
+    line-height: 1.2;
+}
+
+#village_district_town_city {
+    font-size: 18px;
+    opacity: 0.9;
+    line-height: 1.2;
+}
+
+#county_state {
+    font-size: 18px;
+    opacity: 0.9;
+    line-height: 1.2;
+}
+
+#country {
     font-size: 18px;
     opacity: 0.9;
     line-height: 1.2;
