@@ -64,6 +64,7 @@ class SynologyAPI {
             return true;
         } else {
             // Handle error codes (Method 1 or Method 2)
+            logMessage("Full error response: " . json_encode($response), 'DEBUG');
             $errorCode = $response['error']['code'] ?? null;
             $subErrors = $response['error']['errors'] ?? [];
             
@@ -209,6 +210,7 @@ class SynologyAPI {
             return $photos;
         } else {
             // Handle error codes (Method 1 or Method 2)
+            logMessage("Full error response: " . json_encode($response), 'DEBUG');
             $errorCode = $response['error']['code'] ?? null;
             $subErrors = $response['error']['errors'] ?? [];
             
