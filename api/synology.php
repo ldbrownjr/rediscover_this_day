@@ -145,14 +145,19 @@ class SynologyAPI {
         
         for ($year = $startYear; $year <= $currentYear; $year++) {
             logMessage("Querying year {$year} for date {$month}/{$day}...", 'INFO');
-            $photos = $this->getPhotosForSpecificDate($year, $month, $day);
-            
-            if ($photos) {
-                $photoCount = count($photos);
-                logMessage("Found {$photoCount} photos for {$month}/{$day}/{$year}", 'INFO');
-                $allPhotos = array_merge($allPhotos, $photos);
-            } else {
-                logMessage("No photos found for {$month}/{$day}/{$year}", 'INFO');
+            try {
+                $photos = $this->getPhotosForSpecificDate($year, $month, $day);
+                
+                if ($photos) {
+                    $photoCount = count($photos);
+                    logMessage("Found {$photoCount} photos for {$month}/{$day}/{$year}", 'INFO');
+                    $allPhotos = array_merge($allPhotos, $photos);
+                } else {
+                    logMessage("No photos found for {$month}/{$day}/{$year}", 'INFO');
+                }
+            } catch (Exception $e) {
+                logMessage("Error querying photos for {$month}/{$day}/{$year}: " . $e->getMessage(), 'ERROR');
+                // Continue to next year
             }
         }
         
