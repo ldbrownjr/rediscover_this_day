@@ -13,7 +13,7 @@ $config = loadConfig();
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Rediscover This Day">
     <title>Rediscover This Day</title>
-    <link rel="stylesheet" href="css/slideshow.css">
+    <link rel="stylesheet" href="css/slideshow.css?v=<?php echo filemtime('css/slideshow.css'); ?>">
 </head>
 <body>
     <div id="slideshow-container">
@@ -46,6 +46,6 @@ $config = loadConfig();
         var photos = <?php echo json_encode($photos); ?>;
         var config = <?php echo json_encode($config['slideshow']); ?>;
     </script>
-    <script src="js/slideshow.js"></script>
+    <script src="js/slideshow.js?v=<?php echo filemtime('js/slideshow.js'); ?>"></script>
 </body>
 </html>
