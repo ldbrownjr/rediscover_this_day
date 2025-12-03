@@ -73,10 +73,10 @@ body {
 
 #metadata {
     position: absolute;
-    bottom: 80px;
+    bottom: 20px;
     right: 20px;
     background: rgba(0, 0, 0, 0.4);
-    padding: 12px 18px;
+    padding: 10px 10px;
     border-radius: 6px;
     font-size: 16px;
     max-width: 300px;
@@ -88,18 +88,18 @@ body {
 
 #year {
     font-weight: bold;
-    font-size: 18px;
+    font-size: 22px;
     line-height: 1.2;
 }
 
 #location {
-    font-size: 14px;
+    font-size: 16px;
     opacity: 0.9;
     line-height: 1.2;
 }
 
 #image-count {
-    font-size: 12px;
+    font-size: 14px;
     opacity: 0.8;
     line-height: 1.2;
     margin-top: 4px;
