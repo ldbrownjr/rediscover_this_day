@@ -62,9 +62,31 @@ class SynologyAPI {
             $this->sid = $response['data']['sid'];
             $this->did = $response['data']['did'];
             return true;
+        } else {
+            // Handle error codes (Method 1 or Method 2)
+            $errorCode = $response['error']['code'] ?? null;
+            $subErrors = $response['error']['errors'] ?? [];
+            
+            if ($errorCode === 801) {
+                logMessage('Login failed: Invalid credentials or permissions (error 801)', 'ERROR');
+                throw new Exception('Authentication failed: Invalid credentials.');
+            } elseif ($errorCode === 120) {
+                logMessage('Login failed: API access denied (error 120)', 'ERROR');
+                throw new Exception('API access denied.');
+            } elseif ($errorCode === 1100 && !empty($subErrors)) {
+                // Method 2: Log sub-errors for debugging
+                foreach ($subErrors as $subError) {
+                    $subCode = $subError['code'] ?? 'unknown';
+                    $path = $subError['path'] ?? '';
+                    logMessage("Login sub-error: code {$subCode}, path {$path}", 'ERROR');
+                }
+                logMessage('Login failed: Multiple errors (code 1100)', 'ERROR');
+                throw new Exception('Login failed due to multiple errors.');
+            } else {
+                logMessage('Login failed: Unknown error (code: ' . ($errorCode ?? 'N/A') . ')', 'ERROR');
+            }
+            return false;
         }
-        
-        return false;
     }
     
     /**
@@ -185,15 +207,31 @@ class SynologyAPI {
             $photos = isset($response['data']['list']) ? $response['data']['list'] : [];
             logMessage("API call successful, returned " . count($photos) . " photos", 'INFO');
             return $photos;
-        }
-        
-        if ($response) {
-            logMessage("API call failed or returned unsuccessful response: " . json_encode($response), 'WARNING');
         } else {
-            logMessage("API call returned null/empty response", 'WARNING');
+            // Handle error codes (Method 1 or Method 2)
+            $errorCode = $response['error']['code'] ?? null;
+            $subErrors = $response['error']['errors'] ?? [];
+            
+            if ($errorCode === 801) {
+                logMessage('Photo query failed: Permission denied (error 801)', 'ERROR');
+                throw new Exception('Permission denied for photo access.');
+            } elseif ($errorCode === 120) {
+                logMessage('Photo query failed: Invalid request parameters (error 120)', 'ERROR');
+                throw new Exception('Invalid photo query parameters.');
+            } elseif ($errorCode === 1100 && !empty($subErrors)) {
+                // Method 2: Log sub-errors for debugging
+                foreach ($subErrors as $subError) {
+                    $subCode = $subError['code'] ?? 'unknown';
+                    $path = $subError['path'] ?? '';
+                    logMessage("Photo query sub-error: code {$subCode}, path {$path}", 'ERROR');
+                }
+                logMessage('Photo query failed: Multiple errors (code 1100)', 'ERROR');
+                throw new Exception('Photo query failed due to multiple errors.');
+            } else {
+                logMessage('Photo query failed: Unknown error (code: ' . ($errorCode ?? 'N/A') . ')', 'ERROR');
+            }
+            return [];
         }
-        
-        return [];
     }
     
     /**
