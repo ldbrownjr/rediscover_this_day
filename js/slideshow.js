@@ -107,7 +107,7 @@
         yearSpan.textContent = year;
         
         // Set location (always show, display "Missing Location" if none available)
-        const hasLocationData = (
+        var hasLocationData = (
             (photo.landmark && photo.landmark.trim() !== '') ||
             (photo.route && photo.route.trim() !== '') ||
             (photo.village_district_town_city && photo.village_district_town_city.trim() !== '') ||
