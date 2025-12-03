@@ -121,12 +121,12 @@ function performDailyRefresh() {
             $landmark = null;
             $route = null;
             $villageDistrictTownCity = null;
-            $countyState = null;
+            $county = null;
+            $state = null;
             $country = null;
             if (isset($photo['additional']['address'])) {
                 $address = $photo['additional']['address'];
                 $villageDistrictTownCityParts = [];
-                $countyStateParts = [];
                 
                 // Build location string from available address components
                 if (!empty($address['landmark'])) {
@@ -148,10 +148,10 @@ function performDailyRefresh() {
                     $villageDistrictTownCityParts[] = $address['city'];
                 }
                 if (!empty($address['county'])) {
-                    $countyStateParts[] = $address['county'];
+                    $county = $address['county'];
                 }
                 if (!empty($address['state'])) {
-                    $countyStateParts[] = $address['state'];
+                    $state = $address['state'];
                 }
                 if (!empty($address['country']) && $address['country'] !== 'United States') {
                     $country = $address['country'];
@@ -174,7 +174,8 @@ function performDailyRefresh() {
                 'landmark' => $landmark,
                 'route' => $route,
                 'village_district_town_city' => $villageDistrictTownCity,
-                'county_state' => $countyState,
+                'county' => $county,
+                'state' => $state,
                 'country' => $country
             ];
         } else {

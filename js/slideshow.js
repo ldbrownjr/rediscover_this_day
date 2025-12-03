@@ -21,7 +21,8 @@
     var landmarkSpan = document.getElementById('landmark');
     var routeSpan = document.getElementById('route');
     var villageDistrictTownCitySpan = document.getElementById('village_district_town_city');
-    var countyStateSpan = document.getElementById('county_state');
+    var countySpan = document.getElementById('county');
+    var stateSpan = document.getElementById('state');
     var countrySpan = document.getElementById('country');
     var imageCountSpan = document.getElementById('image-count');
     var counter = document.getElementById('counter');
@@ -111,7 +112,8 @@
             (photo.landmark && photo.landmark.trim() !== '') ||
             (photo.route && photo.route.trim() !== '') ||
             (photo.village_district_town_city && photo.village_district_town_city.trim() !== '') ||
-            (photo.county_state && photo.county_state.trim() !== '') ||
+            (photo.county && photo.county.trim() !== '') ||
+            (photo.state && photo.state.trim() !== '') ||
             (photo.country && photo.country.trim() !== '')
         );
 
@@ -130,8 +132,11 @@
         // Set village/district/town/city
         villageDistrictTownCitySpan.textContent = photo.village_district_town_city || '';
 
-        // Set county/state
-        countyStateSpan.textContent = photo.county_state || '';
+        // Set county
+        countySpan.textContent = photo.county || '';
+
+        // Set state
+        stateSpan.textContent = photo.state || '';
 
         // Set country
         countrySpan.textContent = photo.country || '';

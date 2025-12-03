@@ -31,7 +31,8 @@ $config = loadConfig();
                     <span id="landmark"></span>
                     <span id="route"></span>
                     <span id="village_district_town_city"></span>
-                    <span id="county_state"></span>
+                    <span id="county"></span>
+                    <span id="state"></span>
                     <span id="country"></span>
                     <span id="image-count"></span>
                 </div>
