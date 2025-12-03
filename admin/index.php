@@ -173,7 +173,7 @@ $lastRefresh = getLastRefreshInfo();
             <h1>Rediscover This Day - Admin</h1>
             <div class="header-actions">
                 <a href="../index.php" class="btn btn-secondary" target="_blank">View Slideshow</a>
-                <form method="POST" action="/admin/logout.php" style="display: inline;">
+                <form method="POST" action="logout.php" style="display: inline;">
                     <button type="submit" class="btn btn-secondary">Logout</button>
                 </form>
             </div>
