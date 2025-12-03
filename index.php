@@ -9,6 +9,9 @@ $config = loadConfig();
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Rediscover This Day">
     <title>Rediscover This Day</title>
     <link rel="stylesheet" href="css/slideshow.css">
 </head>
