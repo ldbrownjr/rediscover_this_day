@@ -18,6 +18,7 @@
     var photoImg = document.getElementById('current-photo');
     var yearSpan = document.getElementById('year');
     var locationSpan = document.getElementById('location');
+    var imageCountSpan = document.getElementById('image-count');
     var counter = document.getElementById('counter');
     var controls = document.getElementById('controls');
     var prevBtn = document.getElementById('prev-btn');
@@ -76,6 +77,11 @@
         } else {
             locationSpan.textContent = 'Missing Location';
         }
+        
+        // Set image count (e.g., "5 of 85")
+        var currentNumber = currentIndex + 1;
+        var totalCount = photos.length;
+        imageCountSpan.textContent = currentNumber + ' of ' + totalCount;
         
         // Preload next photo
         preloadNextPhoto();

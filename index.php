@@ -25,6 +25,7 @@ $config = loadConfig();
                 <div id="metadata">
                     <span id="year"></span>
                     <span id="location"></span>
+                    <span id="image-count"></span>
                 </div>
             </div>
             

@@ -80,6 +80,13 @@ body {
     line-height: 1.2;
 }
 
+#image-count {
+    font-size: 12px;
+    opacity: 0.8;
+    line-height: 1.2;
+    margin-top: 4px;
+}
+
 #controls {
     position: absolute;
     bottom: 20px;
@@ -156,6 +163,10 @@ body {
         font-size: 14px;
         padding: 10px 15px;
         bottom: 70px;
+    }
+    
+    #image-count {
+        font-size: 11px;
     }
     
     #controls {
