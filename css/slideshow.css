@@ -139,6 +139,7 @@ body {
     height: 45px;
     border-radius: 50%;
     cursor: pointer;
+    margin-right: 15px;
     -webkit-transition: all 0.2s ease;
     transition: all 0.2s ease;
 }
@@ -151,6 +152,10 @@ body {
 #controls button:active {
     -webkit-transform: scale(0.95);
     transform: scale(0.95);
+}
+
+#controls button:last-child {
+    margin-right: 0;
 }
 
 #counter {
