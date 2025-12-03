@@ -202,7 +202,7 @@ class SynologyAPI {
         
         $response = $this->makeRequest($url, $params);
         
-        logMessage("API Response received: " . json_encode($response), 'INFO');
+        logMessage("API Response received: " . json_encode($response), 'DEBUG');
         
         if ($response && isset($response['success']) && $response['success']) {
             $photos = isset($response['data']['list']) ? $response['data']['list'] : [];
@@ -210,7 +210,6 @@ class SynologyAPI {
             return $photos;
         } else {
             // Handle error codes (Method 1 or Method 2)
-            logMessage("Full error response: " . json_encode($response), 'DEBUG');
             $errorCode = $response['error']['code'] ?? null;
             $subErrors = $response['error']['errors'] ?? [];
             
