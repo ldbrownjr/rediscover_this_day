@@ -16,8 +16,7 @@ This document describes all configuration options in `config/config.json`.
   },
   "slideshow": {
     "duration": 5,
-    "transition": "fade",
-    "refresh_time": "00:00"
+    "transition": "fade"
   },
   "admin": {
     "username": "admin",
@@ -88,15 +87,6 @@ This document describes all configuration options in `config/config.json`.
 - **Default**: `"fade"`
 - **Compatibility**: Both work on iPad 2
 
-### `slideshow.refresh_time` (string)
-
-- **Description**: Time of day to refresh photos (informational only)
-- **Format**: `HH:MM` in 24-hour format
-- **Examples**: `"00:00"`, `"12:30"`, `"23:45"`
-- **Required**: Yes
-- **Default**: `"00:00"`
-- **Note**: Actual scheduling is done via cron/Task Scheduler, not this setting
-
 ## Admin Settings
 
 ### `admin.username` (string)
@@ -159,8 +149,7 @@ php -r "echo password_hash('your_new_password', PASSWORD_DEFAULT);"
   },
   "slideshow": {
     "duration": 5,
-    "transition": "fade",
-    "refresh_time": "00:00"
+    "transition": "fade"
   },
   "admin": {
     "username": "admin",
@@ -183,8 +172,7 @@ php -r "echo password_hash('your_new_password', PASSWORD_DEFAULT);"
   },
   "slideshow": {
     "duration": 10,
-    "transition": "none",
-    "refresh_time": "03:00"
+    "transition": "none"
   },
   "admin": {
     "username": "admin",

@@ -278,8 +278,7 @@ Create a web application that displays a daily slideshow of photos from previous
   },
   "slideshow": {
     "duration": "integer (seconds)",
-    "transition": "string (fade|none|slide)",
-    "refresh_time": "string (HH:MM)"
+    "transition": "string (fade|none|slide)"
   },
   "admin": {
     "password_hash": "string"

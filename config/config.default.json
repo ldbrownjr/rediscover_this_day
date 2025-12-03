@@ -9,8 +9,7 @@
   },
   "slideshow": {
     "duration": 5,
-    "transition": "fade",
-    "refresh_time": "00:00"
+    "transition": "fade"
   },
   "admin": {
     "username": "admin",

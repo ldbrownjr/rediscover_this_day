@@ -39,7 +39,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         // Update slideshow settings
         $config['slideshow']['duration'] = (int)$_POST['duration'];
         $config['slideshow']['transition'] = $_POST['transition'];
-        $config['slideshow']['refresh_time'] = $_POST['refresh_time'];
         
         // Update debug settings
         $config['debug']['log_level'] = $_POST['log_level'];
@@ -270,12 +269,6 @@ $lastRefresh = getLastRefreshInfo();
                                 <option value="none" <?php echo $config['slideshow']['transition'] === 'none' ? 'selected' : ''; ?>>Instant</option>
                             </select>
                         </div>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label for="refresh_time">Refresh Time:</label>
-                        <input type="time" id="refresh_time" name="refresh_time" 
-                               value="<?php echo h($config['slideshow']['refresh_time']); ?>">
                     </div>
                 </section>
             </div>
