@@ -25,6 +25,8 @@
     var stateSpan = document.getElementById('state');
     var countrySpan = document.getElementById('country');
     var imageCountSpan = document.getElementById('image-count');
+    var tagsLabel = document.getElementById('tags-label');
+    var tagsList = document.getElementById('tags-list');
     var counter = document.getElementById('counter');
     var controls = document.getElementById('controls');
     var prevBtn = document.getElementById('prev-btn');
@@ -145,7 +147,42 @@
         var currentNumber = currentIndex + 1;
         var totalCount = photos.length;
         imageCountSpan.textContent = currentNumber + ' of ' + totalCount;
-        
+
+        // Set tags
+        var tags = photo.tags || [];
+        var maxTags = 10;
+
+        if (tags.length === 0) {
+            tagsLabel.textContent = 'Tags';
+            tagsList.textContent = 'No Tags';
+        } else {
+            // Sort tags alphabetically
+            var sortedTags = tags.slice().sort();
+
+            tagsLabel.textContent = 'Tags';
+
+            // Clear previous tags
+            tagsList.innerHTML = '';
+
+            // Display first 10 tags
+            var displayCount = Math.min(sortedTags.length, maxTags);
+            for (var i = 0; i < displayCount; i++) {
+                var tagDiv = document.createElement('div');
+                tagDiv.className = 'tag-item';
+                tagDiv.textContent = sortedTags[i];
+                tagsList.appendChild(tagDiv);
+            }
+
+            // If there are more than 10 tags, add "plus X more tags" line
+            if (sortedTags.length > maxTags) {
+                var remainingCount = sortedTags.length - maxTags;
+                var moreTagsDiv = document.createElement('div');
+                moreTagsDiv.className = 'tag-item tag-more';
+                moreTagsDiv.textContent = 'plus ' + remainingCount + ' more tags';
+                tagsList.appendChild(moreTagsDiv);
+            }
+        }
+
         // Preload next photo
         preloadNextPhoto();
     }

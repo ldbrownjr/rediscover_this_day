@@ -127,14 +127,14 @@ function performDailyRefresh() {
             if (isset($photo['additional']['address'])) {
                 $address = $photo['additional']['address'];
                 $villageDistrictTownCityParts = [];
-                
+
                 // Build location string from available address components
                 if (!empty($address['landmark'])) {
                     $landmark[] = $address['landmark'];
                 }
                 if (!empty($address['route'])) {
                     $route = $address['route'];
-                }     
+                }
                 if (!empty($address['village'])) {
                     $villageDistrictTownCityParts[] = $address['village'];
                 }
@@ -163,7 +163,17 @@ function performDailyRefresh() {
                     $countyState = implode(', ', $countyStateParts);
                 }
             }
-            
+
+            // Extract tag data if available
+            $tags = [];
+            if (isset($photo['additional']['tag']) && is_array($photo['additional']['tag'])) {
+                foreach ($photo['additional']['tag'] as $tag) {
+                    if (isset($tag['name']) && !empty($tag['name'])) {
+                        $tags[] = $tag['name'];
+                    }
+                }
+            }
+
             // Store photo metadata
             $cachedPhotos[] = [
                 'id' => $photo['id'],
@@ -176,7 +186,8 @@ function performDailyRefresh() {
                 'village_district_town_city' => $villageDistrictTownCity,
                 'county' => $county,
                 'state' => $state,
-                'country' => $country
+                'country' => $country,
+                'tags' => $tags
             ];
         } else {
             logMessage("Failed to download photo {$photo['id']} - downloadThumbnail returned null", 'WARNING');

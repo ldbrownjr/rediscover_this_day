@@ -36,6 +36,10 @@ $config = loadConfig();
                     <span id="country"></span>
                     <span id="image-count"></span>
                 </div>
+                <div id="tags-metadata">
+                    <div id="tags-label"></div>
+                    <div id="tags-list"></div>
+                </div>
             </div>
             
             <div id="controls">

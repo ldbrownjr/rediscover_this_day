@@ -86,6 +86,45 @@ body {
     align-items: flex-end;
 }
 
+#tags-metadata {
+    position: absolute;
+    bottom: 20px;
+    left: 20px;
+    background: rgba(0, 0, 0, 0.4);
+    padding: 10px 10px;
+    border-radius: 6px;
+    font-size: 16px;
+    text-align: left;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+}
+
+#tags-label {
+    font-weight: bold;
+    font-size: 18px;
+    line-height: 1.2;
+    margin-bottom: 4px;
+}
+
+#tags-list {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+}
+
+.tag-item {
+    font-size: 16px;
+    opacity: 0.9;
+    line-height: 1.4;
+}
+
+.tag-more {
+    opacity: 0.7;
+    font-style: italic;
+    margin-top: 2px;
+}
+
 #year {
     font-weight: bold;
     font-size: 22px;
@@ -223,21 +262,35 @@ body {
         padding: 10px 15px;
         bottom: 70px;
     }
-    
+
+    #tags-metadata {
+        font-size: 14px;
+        padding: 8px 12px;
+        bottom: 70px;
+    }
+
+    #tags-label {
+        font-size: 16px;
+    }
+
+    .tag-item {
+        font-size: 14px;
+    }
+
     #image-count {
         font-size: 11px;
     }
-    
+
     #controls {
         padding: 10px 15px;
     }
-    
+
     #controls button {
         width: 40px;
         height: 40px;
         font-size: 18px;
     }
-    
+
     #counter {
         font-size: 14px;
     }
