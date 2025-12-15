@@ -203,8 +203,13 @@
     function nextPhoto() {
         var nextIndex = (currentIndex + 1) % photos.length;
         showPhoto(nextIndex);
+
+        // Reset timer if autoplay is active
+        if (isPlaying) {
+            startSlideshow();
+        }
     }
-    
+
     /**
      * Show previous photo
      */
@@ -214,6 +219,11 @@
             prevIndex = photos.length - 1;
         }
         showPhoto(prevIndex);
+
+        // Reset timer if autoplay is active
+        if (isPlaying) {
+            startSlideshow();
+        }
     }
     
     /**
