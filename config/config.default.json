@@ -11,6 +11,12 @@
     "duration": 5,
     "transition": "fade"
   },
+  "year_review": {
+    "selection_strategy": "even_distribution",
+    "photos_per_year": 52,
+    "enable_feature": true,
+    "stat_frequency": 8
+  },
   "admin": {
     "username": "admin",
     "password_hash": "$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi"

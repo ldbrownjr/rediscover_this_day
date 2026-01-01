@@ -1,0 +1,184 @@
+/* Year Review Picker Styles - iPad 2 compatible */
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: Arial, Helvetica, sans-serif;
+    background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+    background-attachment: fixed;
+    color: #fff;
+    min-height: 100vh;
+    padding: 20px;
+}
+
+.year-review-container {
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+.year-header {
+    background: rgba(0, 0, 0, 0.3);
+    padding: 20px 30px;
+    border-radius: 8px;
+    margin-bottom: 30px;
+    overflow: hidden;
+}
+
+.year-header h1 {
+    font-size: 28px;
+    font-weight: 600;
+    margin-bottom: 15px;
+    float: left;
+}
+
+.header-actions {
+    float: right;
+}
+
+.header-actions a {
+    margin-left: 10px;
+}
+
+.btn {
+    padding: 10px 20px;
+    background: rgba(255, 255, 255, 0.2);
+    border: 2px solid rgba(255, 255, 255, 0.4);
+    color: #fff;
+    text-decoration: none;
+    border-radius: 5px;
+    font-size: 14px;
+    font-weight: 600;
+    display: inline-block;
+    -webkit-transition: all 0.2s;
+    transition: all 0.2s;
+}
+
+.btn:hover {
+    background: rgba(255, 255, 255, 0.3);
+    border-color: rgba(255, 255, 255, 0.6);
+}
+
+.year-grid {
+    display: -webkit-box;
+    display: -ms-flexbox;
+    display: flex;
+    -ms-flex-wrap: wrap;
+    flex-wrap: wrap;
+    gap: 20px;
+}
+
+.year-grid::after {
+    content: '';
+    -webkit-box-flex: 1;
+    -ms-flex: auto;
+    flex: auto;
+}
+
+.year-card {
+    background: rgba(255, 255, 255, 0.1);
+    border: 2px solid rgba(255, 255, 255, 0.2);
+    border-radius: 12px;
+    padding: 40px 20px;
+    text-align: center;
+    text-decoration: none;
+    color: #fff;
+    -webkit-transition: all 0.3s ease;
+    transition: all 0.3s ease;
+    cursor: pointer;
+    -webkit-box-flex: 0;
+    -ms-flex: 0 1 calc(25% - 15px);
+    flex: 0 1 calc(25% - 15px);
+    min-width: 150px;
+}
+
+.year-card:hover {
+    background: rgba(255, 255, 255, 0.2);
+    border-color: rgba(255, 255, 255, 0.4);
+    -webkit-transform: translateY(-5px);
+    transform: translateY(-5px);
+    -webkit-box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+}
+
+.year-number {
+    font-size: 48px;
+    font-weight: bold;
+    margin-bottom: 10px;
+}
+
+.year-label {
+    font-size: 16px;
+    opacity: 0.9;
+}
+
+/* Responsive breakpoints */
+@media (max-width: 1024px) {
+    .year-card {
+        -webkit-box-flex: 0;
+        -ms-flex: 0 1 calc(33.333% - 14px);
+        flex: 0 1 calc(33.333% - 14px);
+    }
+}
+
+@media (max-width: 768px) {
+    .year-grid {
+        gap: 15px;
+    }
+
+    .year-card {
+        -webkit-box-flex: 0;
+        -ms-flex: 0 1 calc(50% - 8px);
+        flex: 0 1 calc(50% - 8px);
+    }
+
+    .year-header {
+        padding: 15px 20px;
+    }
+
+    .year-header h1 {
+        float: none;
+        font-size: 24px;
+        margin-bottom: 10px;
+    }
+
+    .header-actions {
+        float: none;
+    }
+
+    .header-actions a {
+        margin-left: 0;
+        margin-right: 10px;
+        margin-top: 5px;
+    }
+
+    .year-number {
+        font-size: 36px;
+    }
+
+    .year-label {
+        font-size: 14px;
+    }
+}
+
+@media (max-width: 480px) {
+    body {
+        padding: 15px;
+    }
+
+    .year-card {
+        -webkit-box-flex: 0;
+        -ms-flex: 0 1 100%;
+        flex: 0 1 100%;
+        padding: 30px 20px;
+    }
+
+    .header-actions a {
+        display: block;
+        margin: 5px 0;
+        text-align: center;
+    }
+}

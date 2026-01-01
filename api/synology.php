@@ -239,7 +239,95 @@ class SynologyAPI {
             return [];
         }
     }
-    
+
+    /**
+     * Get all photos for a specific year
+     *
+     * @param int $year The year to query (e.g., 2015)
+     * @return array Array of photo objects with metadata
+     */
+    public function getPhotosForYear($year) {
+        if (!$this->sid && !$this->login()) {
+            logMessage('Failed to login for year query', 'ERROR');
+            return [];
+        }
+
+        // Create timestamps for Jan 1 00:00:00 to Dec 31 23:59:59
+        $startTimestamp = mktime(0, 0, 0, 1, 1, $year);
+        $endTimestamp = mktime(23, 59, 59, 12, 31, $year);
+
+        logMessage("Fetching photos for year {$year}", 'INFO');
+
+        $allPhotos = [];
+        $offset = 0;
+        $limit = 5000; // API max
+
+        do {
+            $batch = $this->getPhotosForTimeRange($startTimestamp, $endTimestamp, $offset, $limit);
+
+            if ($batch === false) {
+                logMessage("Failed to fetch batch at offset {$offset}", 'ERROR');
+                break;
+            }
+
+            $allPhotos = array_merge($allPhotos, $batch);
+
+            // If we got fewer than limit, we've reached the end
+            if (count($batch) < $limit) {
+                break;
+            }
+
+            $offset += $limit;
+
+        } while (count($batch) === $limit);
+
+        logMessage("Retrieved " . count($allPhotos) . " photos for year {$year}", 'INFO');
+
+        // Sort by capture time
+        usort($allPhotos, function($a, $b) {
+            return $a['time'] - $b['time'];
+        });
+
+        return $allPhotos;
+    }
+
+    /**
+     * Get photos for a specific time range (helper method)
+     *
+     * @param int $startTimestamp Unix timestamp start
+     * @param int $endTimestamp Unix timestamp end
+     * @param int $offset Pagination offset
+     * @param int $limit Result limit (max 5000)
+     * @return array|false Array of photos or false on error
+     */
+    private function getPhotosForTimeRange($startTimestamp, $endTimestamp, $offset = 0, $limit = 5000) {
+        $url = $this->baseUrl . '/photo/webapi/entry.cgi';
+
+        $additionals = ['thumbnail', 'address', 'resolution', 'orientation', 'tag'];
+        $additional = str_replace("'", '"', str_replace(' ', '', json_encode($additionals)));
+
+        $params = [
+            'api' => 'SYNO.FotoTeam.Browse.Item',
+            'version' => '3',
+            'method' => 'list',
+            'offset' => $offset,
+            'limit' => $limit,
+            '_sid' => $this->sid,
+            'additional' => $additional,
+            'start_time' => $startTimestamp,
+            'end_time' => $endTimestamp
+        ];
+
+        $response = $this->makeRequest($url, $params);
+
+        if ($response && isset($response['success']) && $response['success']) {
+            return isset($response['data']['list']) ? $response['data']['list'] : [];
+        }
+
+        logMessage('Time range query failed: ' . json_encode($response), 'ERROR');
+        return false;
+    }
+
     /**
      * Get photo thumbnail URL
      */

@@ -1,0 +1,8 @@
+# Ignore all cached images
+*.jpg
+*.jpeg
+*.png
+
+# But keep the directory structure
+!.gitignore
+!.htaccess

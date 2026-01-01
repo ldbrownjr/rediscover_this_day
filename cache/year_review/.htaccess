@@ -1,0 +1,3 @@
+# Allow access to cached year review images
+Order Allow,Deny
+Allow from all

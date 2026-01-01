@@ -295,3 +295,180 @@ body {
         font-size: 14px;
     }
 }
+
+/* Stat Display Styles */
+#stat-display {
+    width: 100%;
+    height: 100%;
+    position: absolute;
+    top: 0;
+    left: 0;
+    display: -webkit-box;
+    display: -ms-flexbox;
+    display: flex;
+    -webkit-box-align: center;
+    -ms-flex-align: center;
+    align-items: center;
+    -webkit-box-pack: center;
+    -ms-flex-pack: center;
+    justify-content: center;
+    background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+    -webkit-transition: opacity 0.3s ease-in-out;
+    transition: opacity 0.3s ease-in-out;
+}
+
+.stat-content {
+    text-align: center;
+    padding: 40px;
+    max-width: 600px;
+}
+
+.stat-title {
+    font-size: 48px;
+    font-weight: bold;
+    margin-bottom: 20px;
+    color: #fff;
+    line-height: 1.2;
+}
+
+.stat-value {
+    font-size: 72px;
+    font-weight: bold;
+    color: #4CAF50;
+    margin-bottom: 10px;
+    line-height: 1.1;
+}
+
+.stat-detail {
+    font-size: 24px;
+    color: rgba(255, 255, 255, 0.9);
+    line-height: 1.4;
+}
+
+/* Loading Screen Styles */
+#loading-screen {
+    width: 100%;
+    height: 100%;
+    display: -webkit-box;
+    display: -ms-flexbox;
+    display: flex;
+    -webkit-box-align: center;
+    -ms-flex-align: center;
+    align-items: center;
+    -webkit-box-pack: center;
+    -ms-flex-pack: center;
+    justify-content: center;
+    background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+}
+
+.loading-message {
+    text-align: center;
+}
+
+.loading-spinner {
+    width: 50px;
+    height: 50px;
+    margin: 0 auto 20px;
+    border: 4px solid rgba(255, 255, 255, 0.3);
+    border-top-color: #fff;
+    border-radius: 50%;
+    -webkit-animation: spin 1s linear infinite;
+    animation: spin 1s linear infinite;
+}
+
+@-webkit-keyframes spin {
+    to { -webkit-transform: rotate(360deg); }
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+.loading-message p {
+    font-size: 20px;
+    color: #fff;
+}
+
+/* Error Screen Styles */
+#error-screen {
+    width: 100%;
+    height: 100%;
+    display: -webkit-box;
+    display: -ms-flexbox;
+    display: flex;
+    -webkit-box-align: center;
+    -ms-flex-align: center;
+    align-items: center;
+    -webkit-box-pack: center;
+    -ms-flex-pack: center;
+    justify-content: center;
+    background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+}
+
+.error-message {
+    text-align: center;
+    padding: 40px;
+    max-width: 500px;
+}
+
+.error-message h2 {
+    font-size: 32px;
+    margin-bottom: 15px;
+    color: #fff;
+}
+
+.error-message p {
+    font-size: 18px;
+    color: rgba(255, 255, 255, 0.8);
+    margin-bottom: 25px;
+}
+
+.error-message .btn {
+    display: inline-block;
+    padding: 12px 24px;
+    background: rgba(255, 255, 255, 0.2);
+    border: 2px solid rgba(255, 255, 255, 0.4);
+    color: #fff;
+    text-decoration: none;
+    border-radius: 5px;
+    font-size: 16px;
+    font-weight: 600;
+    -webkit-transition: all 0.2s;
+    transition: all 0.2s;
+}
+
+.error-message .btn:hover {
+    background: rgba(255, 255, 255, 0.3);
+    border-color: rgba(255, 255, 255, 0.6);
+}
+
+/* Mobile adjustments for stat display */
+@media (max-width: 768px) {
+    .stat-content {
+        padding: 30px 20px;
+    }
+
+    .stat-title {
+        font-size: 36px;
+    }
+
+    .stat-value {
+        font-size: 48px;
+    }
+
+    .stat-detail {
+        font-size: 18px;
+    }
+
+    .loading-message p {
+        font-size: 16px;
+    }
+
+    .error-message h2 {
+        font-size: 24px;
+    }
+
+    .error-message p {
+        font-size: 16px;
+    }
+}

@@ -39,7 +39,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         // Update slideshow settings
         $config['slideshow']['duration'] = (int)$_POST['duration'];
         $config['slideshow']['transition'] = $_POST['transition'];
-        
+
+        // Update year review settings
+        if (!isset($config['year_review'])) {
+            $config['year_review'] = [];
+        }
+        $config['year_review']['enable_feature'] = isset($_POST['year_review_enabled']);
+        $config['year_review']['photos_per_year'] = (int)$_POST['photos_per_year'];
+        $config['year_review']['selection_strategy'] = $_POST['selection_strategy'];
+        $config['year_review']['stat_frequency'] = (int)$_POST['stat_frequency'];
+
         // Update debug settings
         $config['debug']['log_level'] = $_POST['log_level'];
         
@@ -271,14 +280,61 @@ $lastRefresh = getLastRefreshInfo();
                         </div>
                     </div>
                 </section>
+
+                <!-- Year Review Settings -->
+                <section class="admin-section compact">
+                    <h3>Year Review</h3>
+
+                    <div class="form-group">
+                        <label>
+                            <input type="checkbox" id="year_review_enabled" name="year_review_enabled"
+                                   <?php echo ($config['year_review']['enable_feature'] ?? true) ? 'checked' : ''; ?>>
+                            Enable Year Review Feature
+                        </label>
+                        <small>Allows viewing photo highlights from selected years</small>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="photos_per_year">Photos Per Year:</label>
+                            <input type="number" id="photos_per_year" name="photos_per_year"
+                                   value="<?php echo h($config['year_review']['photos_per_year'] ?? 52); ?>"
+                                   min="10" max="200">
+                            <small>Number of highlights to select (10-200)</small>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="stat_frequency">Stat Frequency:</label>
+                            <input type="number" id="stat_frequency" name="stat_frequency"
+                                   value="<?php echo h($config['year_review']['stat_frequency'] ?? 8); ?>"
+                                   min="5" max="20">
+                            <small>Photos between stat slides (5-20)</small>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="selection_strategy">Selection Strategy:</label>
+                        <select id="selection_strategy" name="selection_strategy">
+                            <option value="even_distribution"
+                                <?php echo ($config['year_review']['selection_strategy'] ?? 'even_distribution') === 'even_distribution' ? 'selected' : ''; ?>>
+                                Even Distribution
+                            </option>
+                            <option value="random"
+                                <?php echo ($config['year_review']['selection_strategy'] ?? '') === 'random' ? 'selected' : ''; ?>>
+                                Random Sampling
+                            </option>
+                        </select>
+                        <small>How to select highlight photos</small>
+                    </div>
+                </section>
             </div>
-            
+
             <!-- Bottom Row: Debug Settings -->
             <div class="admin-grid">
                 <!-- Debug Settings -->
                 <section class="admin-section compact">
                     <h3>Debug</h3>
-                    
+
                     <div class="form-group">
                         <label for="log_level">Log Level:</label>
                         <select id="log_level" name="log_level">
@@ -289,10 +345,16 @@ $lastRefresh = getLastRefreshInfo();
                         </select>
                     </div>
                 </section>
-                
-                <!-- Empty space for balance -->
-                <section class="admin-section compact empty-section">
-                    <!-- Intentionally empty for layout balance -->
+
+                <!-- Quick Links -->
+                <section class="admin-section compact">
+                    <h3>Quick Links</h3>
+                    <div class="quick-links">
+                        <a href="../index.php" class="btn btn-secondary">This Day Slideshow</a>
+                        <?php if (isset($config['year_review']['enable_feature']) && $config['year_review']['enable_feature']): ?>
+                            <a href="../year-review.php" class="btn btn-secondary">Year in Review</a>
+                        <?php endif; ?>
+                    </div>
                 </section>
             </div>
             
