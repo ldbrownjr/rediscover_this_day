@@ -331,12 +331,16 @@ class SynologyAPI {
     /**
      * Get photo thumbnail URL
      */
-    public function getThumbnailUrl($photoId, $cacheKey, $size = 'xl') {
+    public function getThumbnailUrl($photoId, $cacheKey, $size = 'xl', $unitId = null)
+    {
+        // Some Synology responses include a thumbnail unit_id that differs from the photo id; prefer it when present.
+        $idForRequest = $unitId ?: $photoId;
+
         return $this->baseUrl . '/photo/webapi/entry.cgi?' . http_build_query([
             'api' => 'SYNO.FotoTeam.Thumbnail',
             'version' => '1',
             'method' => 'get',
-            'id' => $photoId,
+            'id' => $idForRequest,
             'cache_key' => $cacheKey,
             'type' => 'unit',
             'size' => $size,

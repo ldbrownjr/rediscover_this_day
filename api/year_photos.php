@@ -73,12 +73,16 @@ try {
         }
 
         // Download and cache thumbnail to year_review subdirectory
-        $cachedFilename = downloadYearReviewThumbnail($api, $photo['id'], $cacheKey, 'xl');
+        $unitId = isset($photo['additional']['thumbnail']['unit_id']) ? $photo['additional']['thumbnail']['unit_id'] : null;
+        $cachedFilename = downloadYearReviewThumbnail($api, $photo['id'], $cacheKey, 'xl', $year, $unitId);
 
         if (!$cachedFilename) {
-            logMessage('Failed to download thumbnail for photo ' . $photo['id'], 'WARNING');
+            $name = isset($photo['filename']) ? $photo['filename'] : 'unknown';
+            logMessage('Failed to download thumbnail for photo ' . $photo['id'] . ' (' . $name . ')', 'WARNING');
             continue; // Skip photos that fail to download
         }
+
+        logMessage("Cached filename for photo {$photo['id']}: {$cachedFilename}", 'DEBUG');
 
         // Extract location data
         $location = extractLocationData($photo);
@@ -86,12 +90,12 @@ try {
         // Extract tags
         $tags = extractTags($photo);
 
-        $formattedPhotos[] = [
+        // Use same structure as regular slideshow (cache/photos.json)
+        $formattedPhoto = [
             'id' => $photo['id'],
             'filename' => $photo['filename'],
-            'time' => $photo['time'],
-            'year' => date('Y', $photo['time']),
-            'date' => date('M j, Y', $photo['time']),
+            'time' => $photo['time'],  // Unix timestamp - JavaScript will convert this
+            'year' => date('Y', $photo['time']),  // Keep for backwards compatibility
             'cached_filename' => $cachedFilename,
             'landmark' => $location['landmark'],
             'route' => $location['route'],
@@ -101,6 +105,11 @@ try {
             'country' => $location['country'],
             'tags' => $tags
         ];
+
+        // Debug log to verify data matching
+        logMessage("Photo {$photo['id']}: {$photo['filename']} -> {$location['village_district_town_city']}, {$location['state']}", 'DEBUG');
+
+        $formattedPhotos[] = $formattedPhoto;
     }
 
     $api->logout();
@@ -128,10 +137,16 @@ try {
  * @param int $photoId Photo ID
  * @param string $cacheKey Cache key from API
  * @param string $size Thumbnail size (xl, m, sm)
+ * @param int $year Year for cache organization
  * @return string|null Cached filename relative to cache/year_review/ or null on failure
  */
-function downloadYearReviewThumbnail($api, $photoId, $cacheKey, $size = 'xl') {
-    $url = $api->getThumbnailUrl($photoId, $cacheKey, $size);
+function downloadYearReviewThumbnail($api, $photoId, $cacheKey, $size = 'xl', $year = null, $unitId = null)
+{
+    $url = $api->getThumbnailUrl($photoId, $cacheKey, $size, $unitId);
+
+    $idNote = $unitId ? " (unit {$unitId})" : '';
+    logMessage("Downloading thumbnail for photo {$photoId}{$idNote} with cache_key {$cacheKey}", 'DEBUG');
+    logMessage("Thumbnail URL: {$url}", 'DEBUG');
 
     try {
         // Create Guzzle client (same settings as SynologyAPI)
@@ -145,7 +160,8 @@ function downloadYearReviewThumbnail($api, $photoId, $cacheKey, $size = 'xl') {
         $imageData = $response->getBody()->getContents();
 
         if ($imageData) {
-            $filename = $photoId . '_' . $size . '.jpg';
+            // Include year in filename to prevent conflicts between different year queries
+            $filename = ($year ? $year . '_' : '') . $photoId . '_' . $size . '.jpg';
             $filepath = CACHE_PATH . '/year_review/' . $filename;
 
             if (file_put_contents($filepath, $imageData)) {
@@ -246,6 +262,8 @@ function calculateYearStats($photos, $year) {
     $stats['unique_cities'] = count($cities);
     $stats['unique_states'] = count($states);
     $stats['unique_countries'] = count($countries);
+    $stats['states_list'] = $states;
+    $stats['countries_list'] = $countries;
 
     // Find most photographed location
     if (!empty($locationCounts)) {

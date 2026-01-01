@@ -196,11 +196,19 @@
         var imagePath = 'cache/' + photo.cached_filename;
         photoImg.src = imagePath;
 
+        // Convert timestamp to date (same as regular slideshow)
+        var photoDate = new Date(photo.time * 1000);
+        var year = photoDate.getFullYear();
+        var monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+                          'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+        var month = monthNames[photoDate.getMonth()];
+        var day = photoDate.getDate();
+
         // Set year
-        yearSpan.textContent = photo.year;
+        yearSpan.textContent = year;
 
         // Set date (full date for year review)
-        dateSpan.textContent = photo.date;
+        dateSpan.textContent = month + ' ' + day + ', ' + year;
 
         // Set location
         var hasLocationData = (
@@ -272,11 +280,21 @@
         } else if (statType === 'locations') {
             statTitle.textContent = 'Places Explored';
             statValue.textContent = stats.unique_cities + ' cities';
-            var detail = stats.unique_states + ' states';
-            if (stats.unique_countries > 0) {
-                detail += ' • ' + stats.unique_countries + ' countries';
+
+            // Build detail with state and country names
+            var detailParts = [];
+
+            if (stats.states_list && stats.states_list.length > 0) {
+                var statesText = stats.states_list.join(', ');
+                detailParts.push(statesText);
             }
-            statDetail.textContent = detail;
+
+            if (stats.countries_list && stats.countries_list.length > 0) {
+                var countriesText = stats.countries_list.join(', ');
+                detailParts.push(countriesText);
+            }
+
+            statDetail.textContent = detailParts.join(' • ');
         } else if (statType === 'most_photographed') {
             statTitle.textContent = 'Most Photographed';
             statValue.textContent = stats.most_photographed_location;
