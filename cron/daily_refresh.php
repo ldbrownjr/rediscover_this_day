@@ -102,16 +102,21 @@ function performDailyRefresh() {
         $cacheKey = isset($photo['additional']['thumbnail']['cache_key']) 
             ? $photo['additional']['thumbnail']['cache_key'] 
             : null;
-        
+
         if (!$cacheKey) {
             logMessage("Photo {$photo['id']} has no cache key in additional data. Photo structure: " . json_encode($photo), 'WARNING');
             continue;
         }
-        
-        logMessage("Photo {$photo['id']} cache_key: {$cacheKey} - downloading thumbnail...", 'DEBUG');
+
+        // Extract cache key from thumbnail data
+        $unit_id = isset($photo['additional']['thumbnail']['unit_id'])
+            ? $photo['additional']['thumbnail']['unit_id']
+            : null;
+
+        logMessage("Photo {$photo['id']} Unit Id {$unit_id} cache_key: {$cacheKey} - downloading thumbnail...", 'DEBUG');
         
         // Download thumbnail (xl size for better quality)
-        $cachedFilename = $api->downloadThumbnail($photo['id'], $cacheKey, 'xl');
+        $cachedFilename = $api->downloadThumbnail($photo['id'], $cacheKey, 'xl', $unit_id);
         
         if ($cachedFilename) {
             $downloadCount++;

@@ -351,10 +351,12 @@ class SynologyAPI {
     /**
      * Download photo thumbnail to local cache
      */
-    public function downloadThumbnail($photoId, $cacheKey, $size = 'xl') {
-        $url = $this->getThumbnailUrl($photoId, $cacheKey, $size);
+    public function downloadThumbnail($photoId, $cacheKey, $size = 'xl', $unitId = null)
+    {
+        $url = $this->getThumbnailUrl($photoId, $cacheKey, $size, $unitId);
         
         $imageData = $this->downloadFile($url);
+        logMessage('DowloadFile Url: ' . $url, 'DEBUG');
         
         if ($imageData) {
             $filename = $photoId . '_' . $size . '.jpg';
