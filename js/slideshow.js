@@ -31,6 +31,9 @@
     var prevBtn = document.getElementById('prev-btn');
     var playPauseBtn = document.getElementById('play-pause-btn');
     var nextBtn = document.getElementById('next-btn');
+    var yrBtn = document.getElementById('year-review-btn');
+    var yrBtnEmpty = document.getElementById('year-review-btn-empty');
+    var yrArmed = false; // was the Year in Review button visible when this tap began?
     
     // Duration in milliseconds
     var duration = (config.duration || 5) * 1000;
@@ -275,10 +278,25 @@
     }
     
     /**
+     * Show or hide the bottom controls and the Year in Review button together
+     */
+    function setControlsVisible(on) {
+        if (controls) {
+            controls.classList[on ? 'add' : 'remove']('visible');
+        }
+        if (yrBtn) {
+            yrBtn.classList[on ? 'add' : 'remove']('visible');
+        }
+        if (!on) {
+            yrArmed = false;
+        }
+    }
+    
+    /**
      * Show controls
      */
     function showControls() {
-        controls.classList.add('visible');
+        setControlsVisible(true);
         
         // Clear existing timer
         if (controlsTimer) {
@@ -287,8 +305,36 @@
         
         // Auto-hide after 3 seconds
         controlsTimer = setTimeout(function() {
-            controls.classList.remove('visible');
+            setControlsVisible(false);
         }, 3000);
+    }
+    
+    /**
+     * Year in Review buttons (upper-left on the slideshow, inline on the empty screen)
+     */
+    function setupYearReviewButtons() {
+        if (yrBtnEmpty) {
+            // Always visible: no tap guard
+            yrBtnEmpty.addEventListener('click', function() {
+                window.location.href = 'year-review.php';
+            });
+        }
+        
+        if (yrBtn) {
+            // Runs before the document-level touchstart (which reveals the controls),
+            // so it records whether the button was already visible before this tap
+            yrBtn.addEventListener('touchstart', function() {
+                yrArmed = yrBtn.classList.contains('visible');
+            });
+            
+            yrBtn.addEventListener('click', function() {
+                // A tap on the hidden button only reveals it
+                if (!yrArmed && 'ontouchstart' in window) {
+                    return;
+                }
+                window.location.href = 'year-review.php';
+            });
+        }
     }
     
     /**
@@ -320,6 +366,8 @@
     function init() {
         // Start polling for updates (also on the empty "No photos" screen)
         pollTimer = setInterval(pollForUpdates, pollInterval);
+        
+        setupYearReviewButtons();
         
         if (!hasPhotos) {
             return;
@@ -356,7 +404,7 @@
         
         // Initially hide controls after 3 seconds
         setTimeout(function() {
-            controls.classList.remove('visible');
+            setControlsVisible(false);
         }, 3000);
     }
     

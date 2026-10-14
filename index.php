@@ -1,5 +1,5 @@
 <?php
-require_once 'common.php';
+require_once __DIR__ . '/common.php';
 
 header('Cache-Control: no-cache, must-revalidate');
 
@@ -8,6 +8,8 @@ header('Cache-Control: no-cache, must-revalidate');
 $photosVersion = getCachedPhotosVersion();
 $photos = getCachedPhotos();
 $config = loadConfig();
+session_write_close();
+$yrEnabled = isYearReviewEnabled($config);
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -18,7 +20,7 @@ $config = loadConfig();
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Rediscover This Day">
     <title>Rediscover This Day</title>
-    <link rel="stylesheet" href="css/slideshow.css?v=<?php echo filemtime('css/slideshow.css'); ?>">
+    <link rel="stylesheet" href="css/slideshow.css?v=<?php echo filemtime(__DIR__ . '/css/slideshow.css'); ?>">
 </head>
 <body>
     <div id="slideshow-container">
@@ -26,6 +28,9 @@ $config = loadConfig();
             <div class="no-photos">
                 <h2>No photos for today</h2>
                 <p>Check back tomorrow!</p>
+                <?php if ($yrEnabled): ?>
+                    <button id="year-review-btn-empty" type="button" class="btn">Year in Review</button>
+                <?php endif; ?>
             </div>
         <?php else: ?>
             <div id="photo-display">
@@ -53,6 +58,9 @@ $config = loadConfig();
                 <button id="next-btn" title="Next">&gt;</button>
                 <span id="counter"></span>
             </div>
+            <?php if ($yrEnabled): ?>
+                <button id="year-review-btn" type="button" title="Year in Review">Year in Review</button>
+            <?php endif; ?>
         <?php endif; ?>
     </div>
     
@@ -62,6 +70,6 @@ $config = loadConfig();
         var photosVersion = <?php echo json_encode($photosVersion); ?>;
         var config = <?php echo json_encode($config['slideshow']); ?>;
     </script>
-    <script src="js/slideshow.js?v=<?php echo filemtime('js/slideshow.js'); ?>"></script>
+    <script src="js/slideshow.js?v=<?php echo filemtime(__DIR__ . '/js/slideshow.js'); ?>"></script>
 </body>
 </html>

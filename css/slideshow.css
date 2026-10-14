@@ -472,3 +472,43 @@ body {
         font-size: 16px;
     }
 }
+
+/* This Day: "Year in Review" button, upper-left (fades with #controls) */
+#year-review-btn {
+    position: absolute;
+    top: 30px; /* clears the 20px translucent status bar */
+    left: 20px;
+    z-index: 10;
+    padding: 10px 18px;
+    font-size: 16px;
+    color: #fff;
+    background: rgba(0, 0, 0, 0.4);
+    border: 2px solid rgba(255, 255, 255, 0.4);
+    border-radius: 23px;
+    -webkit-appearance: none;
+    font-family: inherit;
+    cursor: pointer;
+    opacity: 0;
+    -webkit-transition: opacity 0.3s ease;
+    transition: opacity 0.3s ease;
+}
+
+#year-review-btn.visible {
+    opacity: 1;
+}
+
+/* This Day: "No photos for today" button (same values as .error-message .btn) */
+.no-photos .btn {
+    display: inline-block;
+    margin-top: 25px;
+    padding: 12px 24px;
+    background: rgba(255, 255, 255, 0.2);
+    border: 2px solid rgba(255, 255, 255, 0.4);
+    color: #fff;
+    border-radius: 5px;
+    font-size: 16px;
+    font-weight: 600;
+    font-family: inherit;
+    -webkit-appearance: none;
+    cursor: pointer;
+}
