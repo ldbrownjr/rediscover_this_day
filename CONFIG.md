@@ -25,6 +25,9 @@ automatically, then deleted. When editing by hand, keep the first line intact.
     "duration": 5,
     "transition": "fade"
   },
+  "year_review": {
+    "enable_feature": true
+  },
   "admin": {
     "username": "admin",
     "password_hash": "$2y$10$..."
@@ -93,6 +96,22 @@ automatically, then deleted. When editing by hand, keep the first line intact.
 - **Required**: Yes
 - **Default**: `"fade"`
 - **Compatibility**: Both work on iPad 2
+
+## Year in Review Settings
+
+### `year_review.enable_feature` (boolean)
+
+- **Description**: Turns the Year in Review feature on or off
+- **Format**: `true` / `false` (admin: "Enable Year Review Feature" checkbox)
+- **Required**: No (a missing key counts as `true`)
+- **Default**: `true`
+- **When off**:
+  - the This Day slideshow hides its "Year in Review" button (also on the "No photos for today" screen);
+  - the admin Quick Links hide the Year in Review link;
+  - `year-review.php` shows "Year in Review is turned off" with a This Day button;
+  - `year-slideshow.php` redirects to `year-review.php`;
+  - `api/year_photos.php` returns 403 and `api/year_thumb.php` returns 404.
+- **Note**: the older `photos_per_year`, `selection_strategy` and `stat_frequency` keys are no longer used; the next admin save removes them.
 
 ## Admin Settings
 

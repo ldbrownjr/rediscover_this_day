@@ -1,7 +1,8 @@
 # Backlog
 
 Open bugs and follow-ups from the full code review (October 2026). Batch 1,
-"This Day reliability" (C1, C2, C3, H3, M1, M6, M8, L1), is done.
+"This Day reliability" (C1, C2, C3, H3, M1, M6, M8, L1), is done. Batch 3,
+"Year in Review", is done (see below).
 
 Each item gives its review ID, the file it's in, and the likely direction for a
 fix. Plan anything non-trivial with the architect first (see
@@ -38,8 +39,8 @@ fix. Plan anything non-trivial with the architect first (see
     and `slideshow.js` throws before polling starts.
   - N5: `api/photos.php` still sends the full photo list, but the client only
     uses `version`.
-  - N6: the `filemtime` paths in `year-slideshow.php` are inconsistent
-    (`__DIR__` vs relative).
+  - ~~N6: the `filemtime` paths in `year-slideshow.php` are inconsistent
+    (`__DIR__` vs relative).~~ Done in Batch 3.
   - N8: unused `downloadFullPhoto()` still writes non-atomically.
 
 ## Batch 2: Security
@@ -76,10 +77,10 @@ M5, M10 and L14.
   - **Sessions start for CLI scripts.** `startAppSession()` also runs for the
     cron and `test_api.php`, creating session files (owned by root if the cron
     runs as root). Fix: skip it when `PHP_SAPI === 'cli'`.
-  - **Session lock blocks the back button.** `api/year_photos.php` holds the
-    session lock for up to 300s, so the iPad's back button can hang while a
-    year loads. Fix: call `session_write_close()` in the `api/*.php` endpoints
-    and on the other non-admin pages.
+  - ~~**Session lock blocks the back button.**~~ Done in Batch 3:
+    `session_write_close()` right after bootstrap in `api/photos.php`,
+    `api/year_photos.php`, `api/year_thumb.php`, `index.php`,
+    `year-review.php` and `year-slideshow.php`.
   - **Wrong JSON error message.** `json_last_error_msg()` is read after a
     `logMessage()` call that decodes JSON again, so the log says "JSON decode
     error: No error".
@@ -88,38 +89,57 @@ M5, M10 and L14.
   - **Not tested:** the root `chown` path in `migrateLegacyConfig()`, and the
     code on a real PHP 8.2 (only 8.4 is installed locally).
 
-## Batch 3: Year in Review (uncommitted work)
+## Batch 3: Year in Review
 
-- **H4. Slow loads and timeouts.** `api/year_photos.php` re-downloads every
-  thumbnail on every request and often runs past the 60s client timeout.
-  - Fix: use the existing thumbnail cache, cache the year's JSON, and align the
-    client and server timeouts.
-- **H5. Unescaped values in `innerHTML`.** Location names and filenames are
-  inserted into `js/year-slideshow.js` markup without escaping.
-  - Fix: escape them, or build the nodes with `textContent`.
-- **H6. justifiedGallery timer leak.** Each location slide starts a timer that
-  is never stopped. Call `justifiedGallery('destroy')` before the next slide
-  replaces it.
-- **H8. Pending decision: CDN vs self-hosting jQuery and justifiedGallery.**
-  The CDN certificates may not be trusted on iOS 9.
-- **M1 / M6 in `api/year_photos.php`.** Move `logout()` into a `finally`
-  block, and write thumbnails with `writeFileAtomic()`.
-- **M2. An empty year shows HTTP 500.** Show an empty state instead.
-- **M3. No way out while loading.** Wire up the back button and touch handling
-  before `loadPhotos()`.
-- **M9. "Unknown City/State/Country" shown.** Omit missing location parts
-  instead.
+Done: H4 (slide list cached per year in `cache/year_review/{year}.cache.php`;
+thumbnails fetched on demand by `api/year_thumb.php` and kept), H5 (escaped
+`innerHTML`), H6 (`justifiedGallery('destroy')` on every slide change), H8
+(jQuery + justifiedGallery self-hosted in `js/lib/` + `css/lib/`), M1, M2, M3,
+M6, M9, L7, L8, L10, L11, L12, plus a This Day "Year in Review" button and a
+working `year_review.enable_feature` switch. The three unused `year_review`
+settings were removed. Nightly cron cleanup of unreferenced thumbnails and an
+admin "Clear Year in Review cache" button were added.
+
 - **Unused stat styles.** The earlier uncommitted stat styles (36px values,
   lighter weights) were dropped in Batch 1 because they never rendered. Bring
   them back only if that was the intended look.
-- **Low items:**
-  - L7: flex `gap` doesn't work on iOS 9 (`.summary-stats`,
-    `css/year-review.css`).
-  - L8: the hover zoom on grid photos sticks on touch.
-  - L10: overlapping fades on quick taps.
-  - L11: dead code (`hierarchy`, `showSummarySlide`, `calculateYearStats`,
-    `orientation`, a duplicate thumbnail downloader).
-  - L12: missing `isset` on the photo dimensions (`resolution`).
+- **Admin Enter key submits "Refresh Now".** Pressing Enter in any text field
+  of the main admin form triggers its first submit button, "Refresh Now",
+  instead of "Save All Settings".
+- **Batch 3 follow-ups:**
+  - **Occasional 502 when `config/` is read-only.** If the shared sid can't be
+    saved, parallel thumbnail requests each log in and out, and about 1 in 9
+    fails with Synology's "invalid sid" 404 (probably one request's logout
+    interfering with another's fresh session). It doesn't happen when `config/`
+    is writable, as on the NAS. Needs a debugger look if that fallback ever
+    matters.
+  - **justifiedGallery console error on failed tiles.** jG 3.8.1 throws
+    `this.resetImgSrc is not a function` from its own image error handler for
+    each failed thumbnail. It's harmless (the tile stays blank and the layout
+    holds), but it's noise. It could be avoided by suppressing jG's error
+    handling for images we size ourselves.
+  - **Orphaned old sids.** Replacing the shared sid (refresh) or deleting it
+    (admin Clear) never logs the old session out; it stays open on the NAS
+    until it expires.
+  - **Sessions on the image endpoint.** `api/year_thumb.php` starts a PHP
+    session (via `common.php`) and sends `Set-Cookie` on cookieless requests.
+  - **Leading zeros accepted.** `year=02019` / `id=0123` pass validation
+    (`ctype_digit` + int cast).
+  - **Month summary vs slides.** A month summary can list a location that has
+    no slide (all its photos lacked a thumbnail cache key), and locations with
+    no country sort first.
+  - **`#controls` gap on iOS 9.** Pre-existing: `css/slideshow.css:198` uses
+    flex `gap`, which iOS 9 ignores.
+  - **Admin `<!-- DEBUG -->` comments** are still output by
+    `admin/index.php`.
+  - **This Day button on touch-capable desktops.** A mouse click on the
+    hidden "Year in Review" button does nothing when `'ontouchstart' in
+    window` is true (the tap guard), until the controls are visible.
+  - **Real test harness.** Still only throwaway scripts (see Testing
+    infrastructure below).
+- **Size cap for `cache/year_review/`.** Thumbnails for every year ever viewed
+  are kept (about 0.4-0.7 MB each, up to ~900 per year). Consider a size cap or
+  an age limit in the nightly cleanup.
 
 ## Batch 4: Other
 
@@ -137,10 +157,9 @@ M5, M10 and L14.
   `config/config.php` is missing.
 - **L5. Comment before the doctype.** `admin/index.php` outputs a debug comment
   before `<!DOCTYPE>`.
-- **L6. Year in Review admin link hidden by default.** The checkbox uses
-  `?? true`, but the link uses `isset`.
-- **L13. Year picker CSS is never cached.** `year-review.php` uses `time()` as
-  the cache-buster. Use `filemtime`.
+- ~~**L6. Year in Review admin link hidden by default.**~~ Done in Batch 3
+  (every check uses `isYearReviewEnabled()`, default true).
+- ~~**L13. Year picker CSS is never cached.**~~ Done in Batch 3 (`filemtime`).
 - **L16. `index.php` assumes `$config['slideshow']` exists.** Related to N4.
 
 ## Testing infrastructure

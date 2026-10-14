@@ -37,17 +37,20 @@ rediscover-this-day/
 ├── api/                   # Synology API integration
 │   ├── synology.php       # SynologyAPI class - API wrapper
 │   ├── photos.php         # JSON endpoint for photo polling
-│   └── year_photos.php    # JSON endpoint for Year in Review (live Synology fetch)
+│   ├── year_photos.php    # JSON endpoint: Year in Review slide list (cached per year)
+│   ├── year_thumb.php     # Image endpoint: Year in Review thumbnail, fetched on demand
+│   └── year_review_lib.php # Year in Review library (functions only, no output)
 │
 ├── cache/                 # Cached images and metadata (writable, public)
 │   ├── photos.json        # Cached photo metadata
 │   ├── .htaccess          # Allow public access to cached images
 │   ├── *.jpg              # Cached photo files
-│   └── year_review/       # Year in Review thumbnails ({year}_{id}_{size}.jpg)
+│   └── year_review/       # Year in Review: {year}.cache.php (guarded slide list) + thumbnails {year}_{id}_xl.jpg
 │
 ├── config/                # Configuration management (writable, protected)
 │   ├── config.php         # Active configuration: 404 guard line + JSON (auto-migrated from config.json)
 │   ├── config.default.json # Default configuration template (seed)
+│   ├── synology_session.php # Shared Synology sid for api/year_thumb.php (guarded, gitignored, live credential)
 │   └── .htaccess          # Apache only; Nginx deny rules protect config/ on the NAS
 │
 ├── cron/                  # Scheduled task scripts
@@ -56,11 +59,14 @@ rediscover-this-day/
 ├── css/                   # Stylesheets
 │   ├── slideshow.css      # Slideshow styles (shared by index.php AND year-slideshow.php)
 │   ├── year-review.css    # Year picker page
+│   ├── year-slideshow.css # Year in Review slideshow (loaded after slideshow.css)
+│   ├── lib/               # justifiedGallery 3.8.1 CSS (self-hosted, byte-identical to upstream)
 │   └── admin.css          # Admin interface styling
 │
 ├── js/                    # Client-side JavaScript
 │   ├── slideshow.js       # This Day slideshow logic (ES5, iPad 2 compatible)
-│   └── year-slideshow.js  # Year in Review slideshow logic (ES5)
+│   ├── year-slideshow.js  # Year in Review slideshow logic (ES5)
+│   └── lib/               # jQuery 3.7.1 + justifiedGallery 3.8.1 (self-hosted, byte-identical) + THIRD_PARTY_LICENSES.txt
 │
 ├── logs/                  # Application logs (protected, writable)
 │   ├── app.log.php        # Main application log (first line is a 404 guard)
@@ -82,7 +88,7 @@ rediscover-this-day/
 - CSS3 with fade transitions
 - HTML5 with mobile meta tags
 - NO frameworks or transpilers (legacy compatibility)
-- Exception (provisional): `year-slideshow.php` loads jQuery 3.7.1 + justifiedGallery 3.8.1 from CDNs for the location photo grid. Not yet verified on iPad 2.
+- Exception (provisional): jQuery 3.7.1 + justifiedGallery 3.8.1, self-hosted in `js/lib/` and `css/lib/`, used by `year-slideshow.php` for the Year in Review location grid only. Still unverified on the iPad 2.
 
 **APIs:**
 - Synology Photos API (SYNO.Foto.Browse.Item, SYNO.Foto.Thumbnail)
@@ -177,7 +183,7 @@ $api = new SynologyAPI($config['synology']['url'], $config['synology']['username
 ### Things to Avoid
 
 - DO NOT use modern JavaScript (ES6+) features
-- DO NOT use external JavaScript libraries or frameworks (beyond the provisional jQuery/justifiedGallery exception on `year-slideshow.php`)
+- DO NOT use external JavaScript libraries or frameworks (beyond the provisional jQuery 3.7.1 + justifiedGallery 3.8.1 exception, self-hosted in `js/lib/` and `css/lib/`, Year in Review grid only; still unverified on the iPad 2)
 - DO NOT create new configuration options without updating `config.default.json`
 - DO NOT bypass admin authentication checks
 - DO NOT output HTML without using `h()` function
@@ -299,8 +305,10 @@ Edit `config/config.php` (keep the first `<?php ... ?>` guard line) and set:
 ```bash
 cd /volume2/web/rediscover-this-day
 rm -f cache/photos.json cache/*.jpg
-rm -f cache/year_review/*.jpg
+rm -f cache/year_review/*.jpg cache/year_review/*.cache.php
 ```
+
+Year in Review only: admin → **Clear Year in Review cache** does the same (keeps `.gitignore`/`.htaccess`) and also deletes the shared Synology session `config/synology_session.php`.
 
 (Don't delete `config/config.php` or `logs/app.log.php` here.)
 
@@ -354,8 +362,7 @@ See `config/config.default.json` for complete configuration structure.
 - `photos.first_year`: Earliest year to include (default: 2010)
 - `slideshow.duration`: Photo display duration in seconds (default: 5)
 - `slideshow.transition`: Transition effect (`fade` or `none`)
-- `year_review.enable_feature`: Shows the Year in Review link in admin (does not block access to `year-review.php`)
-- `year_review.photos_per_year`, `year_review.selection_strategy`, `year_review.stat_frequency`: Saved by the admin form but currently unused since the "Places Explored" rework
+- `year_review.enable_feature` (default `true`): when off, hides the This Day "Year in Review" button and the admin link, and turns off the Year in Review pages and endpoints (`year-review.php` shows an "off" panel, `year-slideshow.php` redirects, `api/year_photos.php` returns 403, `api/year_thumb.php` 404). The old `photos_per_year`, `selection_strategy` and `stat_frequency` keys are removed on the next admin save.
 - `admin.username`: Admin username (default: `admin`)
 - `admin.password_hash`: Bcrypt hash of admin password
 - `debug.log_level`: Logging level (`DEBUG`, `INFO`, `WARNING`, `ERROR`)
@@ -378,8 +385,6 @@ See `config/config.default.json` for complete configuration structure.
 - **Single user**: Admin interface supports one admin account only
 - **No photo upload**: Application is read-only from Synology Photos
 - **Daily refresh only**: No real-time photo updates for This Day (by design)
-- **Year in Review is slow and uncached**: `api/year_photos.php` fetches the whole year live from Synology on every request (`set_time_limit(300)`, 60s client timeout) and re-downloads every thumbnail
-- **CDN dependency**: Year in Review's grid needs internet access for jQuery/justifiedGallery
 - **No mobile admin optimization**: Admin interface is functional but not mobile-first
 
 ### Recent Changes (Git History)
@@ -406,7 +411,7 @@ On the iPad, the app was set up by browsing to the URL in Safari and choosing **
 - Because the app lives under `/rediscover-this-day/`, keep URLs relative (`css/…`, `year-review.php`, `../index.php`). Root-relative paths (`/css/…`) would break.
 - Navigate between pages with `window.location.href` from JS. On older iOS, plain `<a href>` links in a standalone web app can open in Safari instead of staying full screen. Verify any new link from the Home Screen icon.
 - New pages meant for the iPad need the same `apple-mobile-web-app-*` meta tags.
-- Year in Review was originally meant to be its own second Home Screen icon (saved at `year-review.php`). A link to it from the This Day slideshow is also under consideration. Either way, navigating from the year picker to `year-slideshow.php` and back must stay full screen.
+- Year in Review is reached from the This Day slideshow's **Year in Review** button (upper-left; it fades in and out with the bottom controls, and a tap while it's hidden only reveals it), or from the button on the "No photos for today" screen. A second Home Screen icon saved at `year-review.php` also works. Navigating from the year picker to `year-slideshow.php` and back must stay full screen (the picker's links navigate via `window.location.href`).
 - Test from the Home Screen icon, not just a Safari tab. Behavior and caching differ between the two.
 
 **Why PHP instead of Python?**
@@ -423,12 +428,13 @@ Photos for "this day" only change once per day (at midnight), so real-time updat
 
 **How Year in Review works**
 `year-review.php` lists years from `photos.first_year` to the current year. `year-slideshow.php?year=YYYY` calls `api/year_photos.php` via XHR. The endpoint:
-1. Fetches every photo for the year.
-2. Groups photos by month, then by country/state/city from `additional.address`.
-3. Picks up to 9 photos per location and downloads thumbnails to `cache/year_review/`.
-4. Returns `{ year_summary, months: [{ summary, location_slides }] }`.
+1. Serves the year's slide list from the guarded `cache/year_review/{year}.cache.php` if it's fresh (past years: built after the year ended, then permanent; current year: built today).
+2. Otherwise logs in, fetches every photo for the year, groups them by month and then by city/state/country from `additional.address` (empty parts omitted; photos with no address go to a final "Unknown location" slide), picks up to 9 photos per location, writes the list file atomically and logs out. No thumbnails are downloaded here.
+3. Returns `{ year_summary, months: [{ summary, location_slides: [{ title, photo_count, photos: [{ id, filename, src, w?, h? }] }] }] }`. Each `src` is the cached `cache/year_review/{year}_{id}_xl.jpg` if it exists, otherwise `api/year_thumb.php?year=Y&id=N`.
 
-`js/year-slideshow.js` then plays the slides in order: the year summary, then each month's summary followed by that month's location grids.
+`api/year_thumb.php` serves a cached thumbnail, or looks the id up in the year's list file (only photos selected into slides are allowed), fetches it from Synology with a **shared sid** (`config/synology_session.php`, guarded, never logged, never logged out by design), saves it atomically and streams it. The shared sid is the one exception to "login() then logout()". Synology's thumbnail API answers an expired or invalid sid with a plain HTML 404, the same as for a deleted photo, so on any failed fetch the endpoint re-logs in once (under `config/.synology_session.lock`, so concurrent requests share one login) and retries, but only if the stored sid is at least 5 minutes old (`SHARED_SID_RETRY_MIN_AGE`); a younger sid gets a 502 straight away. Synology codes 106/107/119, if they ever appear, always re-log in. A deleted photo therefore costs at most one login per 5 minutes. A request makes at most 2 logins, and a fresh login that can't be saved (e.g. `config/` not writable) is logged out at the end of that request and not retried.
+
+`js/year-slideshow.js` then plays the slides in order: the year summary, then each month's summary followed by that month's location grids, preloading the next location slide's photos. Location grids are laid out by justifiedGallery with `rowHeight` 165 / `maxRowHeight` 175 so 9 photos fit on one 1024×768 screen; if a grid still overflows (e.g. a panorama, or 16:9 photos in portrait), it is re-laid out at 85% row height, up to 3 times. The nightly cron deletes thumbnails no list file references (older than an hour); the admin **Clear Year in Review cache** button deletes all list files and thumbnails.
 
 ### Architecture Decisions
 

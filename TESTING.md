@@ -134,6 +134,62 @@ Use this checklist to verify the application is working correctly.
 - [ ] 'A' key shows previous photo
 - [ ] 'D' key shows next photo
 
+### This Day "Year in Review" Button (iPad 2, launched from the Home Screen icon)
+
+- [ ] "Year in Review" sits in the upper-left, clear of the status bar, overlapping nothing, in portrait and landscape
+- [ ] It fades in and out together with the bottom controls
+- [ ] A tap while it's hidden only reveals it; a second tap opens the year picker, still full screen
+- [ ] Previous / Play-Pause / Next behave as before
+- [ ] "No photos for today" screen: the button is always visible and opens the year picker
+- [ ] With `year_review.enable_feature` off, neither button is shown
+- [ ] Apart from the button, This Day looks unchanged
+
+## Year in Review Tests
+
+### Year Picker and Slideshow (iPad 2, launched from the Home Screen icon)
+
+- [ ] Year tiles and "This Day Slideshow" stay full screen
+- [ ] A big year never opened before starts within seconds
+- [ ] Grid images are mostly ready when each location slide fades in
+- [ ] Every 9-photo grid fits on one screen with no scrollbar, in landscape and portrait (include a panorama and a slide of 16:9 photos)
+- [ ] Year and month summary boxes wrap legibly with space between rows
+- [ ] A failed tile shows as a blank rounded tile and the layout holds
+- [ ] Back works during loading, on the error screen and on the slideshow
+- [ ] Turn on Airplane mode, open a year: "Unable to load photos" with Try Again; Try Again works once back online
+- [ ] A year with no photos shows "No photos from YYYY" with only a Back button
+- [ ] Quick next/prev taps: no double fades
+- [ ] 10 minutes of autoplay: no crash or reload
+- [ ] A portrait phone photo is laid out with the right proportions (not cropped oddly)
+
+### Endpoints (local `php -S`)
+
+- [ ] `api/year_photos.php?year=Y`: first call builds the list (seconds), the next is cached (`"cached": true`, well under 0.5s)
+- [ ] `api/year_thumb.php`: a miss returns a JPEG and creates `cache/year_review/{Y}_{id}_xl.jpg`; the next list call returns that file as a direct `src`
+- [ ] Bad input (`id=../x`, `id=1e3`, empty id, `id[]=1`, unknown id, years out of range) returns an empty 404 with no file written and no Synology call
+- [ ] 9 parallel misses with no `config/synology_session.php`: all 200, exactly one Synology login in the log (DEBUG)
+- [ ] Expired sid: write a junk sid (keep the guard line) with `created` more than 5 minutes ago: the next miss re-logs in once and returns 200; 9 parallel misses also cause exactly one login
+- [ ] Junk sid with `created` under 5 minutes ago: a miss returns 502 with no login
+- [ ] A photo that can't be fetched (e.g. deleted since the list was built): repeated requests cause at most one login per 5 minutes
+- [ ] `config/` not writable: 9 parallel misses log as many Synology logouts as logins (DEBUG), so no unsaved session is left open
+
+### Shared-sid invalidation (on the NAS)
+
+`api/year_photos.php` does its own login/logout; check that this doesn't break the shared thumbnail session:
+
+1. [ ] Open an uncached year A and view a location slide (its tiles load).
+2. [ ] Within 5 minutes, open a different uncached year B.
+3. [ ] B's tiles load.
+4. [ ] Repeat steps 1–3 right after admin **Test Connection**.
+- [ ] Feature off: `year_photos.php` 403 `disabled`, `year_thumb.php` 404, `year-slideshow.php` redirects, `year-review.php` shows the off panel
+- [ ] No `_sid` values or the sid string in responses, `cache/year_review/*.cache.php` or the log
+
+### Cache Maintenance
+
+- [ ] `php cron/daily_refresh.php`: This Day output and exit code unchanged; the log has a "Year in Review cleanup: deleted N, kept N, failed N" line
+- [ ] Cleanup deletes unreferenced thumbnails older than an hour and stale `.*.tmp`; keeps referenced ones, recent ones, and all thumbnails of a year whose list file is corrupt (WARNING); never touches `.gitignore`, `.htaccess` or `*.cache.php`
+- [ ] Admin "Clear Year in Review cache" deletes lists, thumbnails and `config/synology_session.php`, keeps the dotfiles; it is rejected without a CSRF token
+- [ ] Enter in an admin text field does not trigger the Clear button
+
 ## Daily Refresh Tests
 
 ### Manual Execution
