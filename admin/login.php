@@ -1,20 +1,32 @@
 <?php
-require_once '../common.php';
+require_once __DIR__ . '/../common.php';
 
 $error = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $username = $_POST['username'] ?? '';
     $password = $_POST['password'] ?? '';
+    $username = is_string($username) ? $username : '';
+    $password = is_string($password) ? $password : '';
+    // Safe form for the log: no control characters (no log injection), max 64 chars
+    $logUsername = substr((string)preg_replace('/[\x00-\x1F\x7F]/', '', $username), 0, 64);
     
-    if (verifyAdminPassword($username, $password)) {
+    if (!verifyCsrf()) {
+        $error = 'Session expired, please try again';
+        logMessage('Login rejected: missing or invalid CSRF token', 'WARNING');
+    } elseif (verifyAdminPassword($username, $password)) {
+        // New session ID on privilege change (prevents session fixation)
+        session_regenerate_id(true);
         $_SESSION['admin_logged_in'] = true;
         $_SESSION['admin_username'] = $username;
+        rotateCsrfToken();
+        logMessage('Admin login successful for user: ' . $logUsername, 'INFO');
         header('Location: index.php');
         exit;
     } else {
+        sleep(1); // Slow down password guessing
         $error = 'Invalid username or password';
-        logMessage("Failed login attempt for user: $username", 'WARNING');
+        logMessage('Failed login attempt for user: ' . $logUsername, 'WARNING');
     }
 }
 ?>
@@ -37,6 +49,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             <?php endif; ?>
             
             <form method="POST" action="login.php">
+                <?php echo csrfField(); ?>
                 <div class="form-group">
                     <label for="username">Username:</label>
                     <input type="text" id="username" name="username" required autofocus>

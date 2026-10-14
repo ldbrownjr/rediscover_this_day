@@ -1,6 +1,13 @@
 # Configuration Reference
 
-This document describes all configuration options in `config/config.json`.
+This document describes all configuration options in `config/config.php`.
+
+`config/config.php` holds plain JSON after a one-line guard
+(`<?php http_response_code(404); exit; ?>`), so a direct web request returns an
+empty 404 even if the web server's deny rules are missing. It's created
+automatically from `config/config.default.json` on first load. An existing
+`config/config.json` (older installs) is migrated to `config/config.php`
+automatically, then deleted. When editing by hand, keep the first line intact.
 
 ## Configuration Structure
 
@@ -52,7 +59,7 @@ This document describes all configuration options in `config/config.json`.
 - **Format**: Plain text string
 - **Required**: Yes
 - **Default**: Empty string
-- **Security**: Stored in plain text - ensure file permissions are secure (666 or 600)
+- **Security**: Stored in plain text - keep `config/config.php` out of git and the web server's reach (see Security Best Practices)
 
 ## Photo Settings
 
@@ -126,12 +133,20 @@ php -r "echo password_hash('your_new_password', PASSWORD_DEFAULT);"
 
 1. **Change default password immediately**
 2. **Use HTTPS** for admin access when possible
-3. **Restrict file permissions**:
+3. **File permissions**: `config/config.php` must be readable by both the web
+   server user and the Task Scheduler (cron) user, so don't use `600` unless
+   both run as the same user. Use the permissions in `CLAUDE.md`:
    ```bash
-   chmod 600 config/config.json  # Owner read/write only
+   chmod 666 config/config.php
    ```
+   Saves replace the file with an atomic rename, so the writer also needs write
+   access to the `config/` directory itself (`chmod 777 config/`). A migration
+   or first-run seed keeps the file at least `0644`, and a migration run as root
+   hands the file to the old `config.json` owner.
 4. **Use strong Synology password** - this is stored in plain text
-5. **Protect config directory** with `.htaccess` (already included)
+5. **Protect the config directory**: the guard line makes a direct request
+   return 404, and the Nginx deny rules in `INSTALL.md` block `config/`
+   entirely (`.htaccess` files are ignored by Nginx).
 
 ## Example Configurations
 
@@ -196,18 +211,30 @@ Invalid configurations will show errors in the admin interface.
 
 ## Backup
 
-Always backup your configuration before making changes:
+Always backup your configuration before making changes, to a `.php` name
+outside the git checkout:
 
 ```bash
-cp config/config.json config/config.json.backup
+cp config/config.php ~/config.backup.php
 ```
+
+The copy keeps the guard line, so it's still safe if it ends up somewhere the
+web server can reach. Don't keep a backup in the web root under a non-`.php`
+name (such as `config.php.backup` or `config.json.bak`): the web server would
+serve it as plain text, credentials included. (`config/*.backup*` is in
+`.gitignore` as a safety net, not as a place to keep backups.)
 
 ## Restoring Defaults
 
 To restore default configuration:
 
 ```bash
-cp config/config.default.json config/config.json
+rm config/config.php
+rm -f config/config.json   # leftover legacy file, if any
 ```
+
+The next page load recreates it from `config/config.default.json`. Remove a
+leftover `config/config.json` too, otherwise it is migrated back into
+`config/config.php` instead of the defaults being used.
 
 **Note**: This will reset admin password to `password` - change it immediately!

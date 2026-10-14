@@ -8,6 +8,7 @@ This file provides context and guidelines for Claude when working on this projec
 
 **Key Features:**
 - Date-based photo discovery (shows photos taken on today's date from previous years)
+- Year in Review: pick a year, then step through a year summary, per-month summaries, and per-location photo grids ("Places Explored")
 - Auto-playing slideshow with configurable transitions
 - Legacy browser support (works on iPad 2 with Safari iOS 9.3.5)
 - Web-based admin interface for configuration
@@ -20,10 +21,13 @@ This file provides context and guidelines for Claude when working on this projec
 
 ```
 rediscover-this-day/
-├── index.php              # Main slideshow display page
+├── index.php              # Main "This Day" slideshow display page
+├── year-review.php        # Year in Review: year picker grid
+├── year-slideshow.php     # Year in Review: slideshow for ?year=YYYY
 ├── common.php             # Shared utility functions (config, logging, auth)
+├── test_api.php           # CLI-only smoke test for the Synology API (404 over the web)
 ├── composer.json          # PHP dependency management (Guzzle HTTP)
-├── .htaccess              # Apache rewrite rules
+├── .htaccess              # Apache rules (ignored: the NAS serves this site with Nginx)
 │
 ├── admin/                 # Admin control panel (session-protected)
 │   ├── index.php          # Main admin dashboard
@@ -32,39 +36,43 @@ rediscover-this-day/
 │
 ├── api/                   # Synology API integration
 │   ├── synology.php       # SynologyAPI class - API wrapper
-│   └── photos.php         # JSON endpoint for photo polling
+│   ├── photos.php         # JSON endpoint for photo polling
+│   └── year_photos.php    # JSON endpoint for Year in Review (live Synology fetch)
 │
 ├── cache/                 # Cached images and metadata (writable, public)
 │   ├── photos.json        # Cached photo metadata
 │   ├── .htaccess          # Allow public access to cached images
-│   └── *.jpg              # Cached photo files
+│   ├── *.jpg              # Cached photo files
+│   └── year_review/       # Year in Review thumbnails ({year}_{id}_{size}.jpg)
 │
 ├── config/                # Configuration management (writable, protected)
-│   ├── config.json        # Active configuration (created on install)
-│   ├── config.default.json # Default configuration template
-│   └── .htaccess          # Protect config from web access
+│   ├── config.php         # Active configuration: 404 guard line + JSON (auto-migrated from config.json)
+│   ├── config.default.json # Default configuration template (seed)
+│   └── .htaccess          # Apache only; Nginx deny rules protect config/ on the NAS
 │
 ├── cron/                  # Scheduled task scripts
-│   └── daily_refresh.php  # Fetches & caches photos for today's date
+│   └── daily_refresh.php  # Fetches & caches photos for today's date (CLI only; 404 over the web)
 │
 ├── css/                   # Stylesheets
-│   ├── slideshow.css      # Slideshow appearance and animations
+│   ├── slideshow.css      # Slideshow styles (shared by index.php AND year-slideshow.php)
+│   ├── year-review.css    # Year picker page
 │   └── admin.css          # Admin interface styling
 │
 ├── js/                    # Client-side JavaScript
-│   └── slideshow.js       # Slideshow logic (ES5, iPad 2 compatible)
+│   ├── slideshow.js       # This Day slideshow logic (ES5, iPad 2 compatible)
+│   └── year-slideshow.js  # Year in Review slideshow logic (ES5)
 │
 ├── logs/                  # Application logs (protected, writable)
-│   ├── app.log            # Main application log
-│   └── .htaccess          # Protect logs from web access
+│   ├── app.log.php        # Main application log (first line is a 404 guard)
+│   └── .htaccess          # Apache only; Nginx deny rules protect logs/ on the NAS
 │
-└── vendor/                # Composer dependencies (Guzzle)
+└── vendor/                # Composer dependencies (Guzzle) — committed to git, NAS doesn't run Composer
 ```
 
 ## Technology Stack
 
 **Backend:**
-- PHP 7.0+ (server-side logic)
+- PHP 8.2 on the NAS (locked dependencies require ≥ 8.1; avoid 8.3+ features)
 - Composer for dependency management
 - Guzzle HTTP Client (v7.10) for Synology API requests
 - Session-based authentication
@@ -74,6 +82,7 @@ rediscover-this-day/
 - CSS3 with fade transitions
 - HTML5 with mobile meta tags
 - NO frameworks or transpilers (legacy compatibility)
+- Exception (provisional): `year-slideshow.php` loads jQuery 3.7.1 + justifiedGallery 3.8.1 from CDNs for the location photo grid. Not yet verified on iPad 2.
 
 **APIs:**
 - Synology Photos API (SYNO.Foto.Browse.Item, SYNO.Foto.Thumbnail)
@@ -110,7 +119,9 @@ rediscover-this-day/
 - NEVER skip `requireAdmin()` checks for admin pages
 - Use `password_hash()` and `password_verify()` for password handling
 - Configuration file contains plain-text Synology password - file permissions are critical
-- Protect sensitive directories with `.htaccess` files
+- Sensitive data files are guarded `.php` files (`config/config.php`, `logs/app.log.php`) whose first line returns an empty 404; the NAS's Nginx deny rules (see `INSTALL.md`) are the second layer. `.htaccess` is ignored under Nginx
+- Admin POST forms need `csrfField()` and the handler must check `verifyCsrf()`
+- Never log Synology `_sid`/passwords; `logMessage()` runs everything through `redactSecrets()`
 
 **Error Handling:**
 - Use `logMessage()` for all errors, warnings, and important events
@@ -140,8 +151,9 @@ $config = loadConfig();
 
 **Logging:**
 ```php
-logMessage('INFO', 'Starting photo refresh');
-logMessage('ERROR', 'Failed to connect to Synology', ['url' => $url]);
+// Signature: logMessage($message, $level = 'INFO') — message first, no context array
+logMessage('Starting photo refresh', 'INFO');
+logMessage('Failed to connect to Synology: ' . $url, 'ERROR');
 ```
 
 **HTML Output:**
@@ -165,12 +177,12 @@ $api = new SynologyAPI($config['synology']['url'], $config['synology']['username
 ### Things to Avoid
 
 - DO NOT use modern JavaScript (ES6+) features
-- DO NOT use external JavaScript libraries or frameworks
+- DO NOT use external JavaScript libraries or frameworks (beyond the provisional jQuery/justifiedGallery exception on `year-slideshow.php`)
 - DO NOT create new configuration options without updating `config.default.json`
 - DO NOT bypass admin authentication checks
 - DO NOT output HTML without using `h()` function
 - DO NOT use CSS frameworks (Bootstrap, Tailwind, etc.)
-- DO NOT commit `config/config.json` to git (contains credentials)
+- DO NOT commit `config/config.php` (or a legacy `config/config.json`) to git (contains credentials)
 - DO NOT commit cached images or logs to git
 - DO NOT use `const` or `let` in JavaScript (use `var`)
 - DO NOT use template literals in JavaScript (use string concatenation)
@@ -206,7 +218,7 @@ $api = new SynologyAPI($config['synology']['url'], $config['synology']['username
 1. Run `php cron/daily_refresh.php` manually
 2. Verify photos are cached in `cache/` directory
 3. Check `cache/photos.json` is created/updated
-4. Review `logs/app.log` for errors
+4. Review `logs/app.log.php` for errors
 
 ### Edge Cases to Test
 
@@ -235,7 +247,7 @@ $api = new SynologyAPI($config['synology']['url'], $config['synology']['username
 ### External Dependencies
 
 - **Synology NAS** with Photos package installed
-- **PHP 7.0+** web server (Apache or Nginx)
+- **PHP 8.2** web server (Apache or Nginx) — minimum 8.1 for the locked dependencies
 - **Task Scheduler** or cron for automated daily refresh
 
 ## Common Tasks
@@ -243,7 +255,7 @@ $api = new SynologyAPI($config['synology']['url'], $config['synology']['username
 ### Update Configuration
 
 1. Admin interface: `/admin/` → Update fields → Save Configuration
-2. Or manually edit `config/config.json` (restart not required)
+2. Or manually edit `config/config.php` (keep its first guard line; restart not required)
 
 ### Manually Refresh Photos
 
@@ -252,26 +264,28 @@ $api = new SynologyAPI($config['synology']['url'], $config['synology']['username
 2. Scroll to Status section
 3. Click "Refresh Now" button
 
-**Via Command Line:**
+**Via Command Line** (CLI only; there is no web `?run` trigger):
 ```bash
-php /volume1/web/rediscover-this-day/cron/daily_refresh.php
+php /volume2/web/rediscover-this-day/cron/daily_refresh.php
 ```
 
 ### Check Logs
 
 ```bash
-tail -f /volume1/web/rediscover-this-day/logs/app.log
+tail -f /volume2/web/rediscover-this-day/logs/app.log.php
 ```
+
+The first line of the log is the `<?php ... ?>` guard; `tail -f` works as usual.
 
 ### Test Synology API Connection
 
 ```bash
-php /volume1/web/rediscover-this-day/test_api.php
+php /volume2/web/rediscover-this-day/test_api.php
 ```
 
 ### Reset Admin Password
 
-Edit `config/config.json` and set:
+Edit `config/config.php` (keep the first `<?php ... ?>` guard line) and set:
 ```json
 "admin": {
   "username": "admin",
@@ -283,8 +297,12 @@ Edit `config/config.json` and set:
 ### Clear Cache
 
 ```bash
+cd /volume2/web/rediscover-this-day
 rm -f cache/photos.json cache/*.jpg
+rm -f cache/year_review/*.jpg
 ```
+
+(Don't delete `config/config.php` or `logs/app.log.php` here.)
 
 Then trigger a manual refresh.
 
@@ -294,19 +312,34 @@ Then trigger a manual refresh.
 composer update
 ```
 
+`vendor/` is committed to git because the NAS doesn't run Composer. Commit the resulting `vendor/` and `composer.lock` changes along with any `composer update`.
+
+### Deploy to the NAS
+
+Deploys are manual via git:
+
+1. Commit and push to `origin` (github.com/ldbrownjr/rediscover_this_day).
+2. On the NAS: `cd /volume2/web/rediscover-this-day && git pull`.
+
+Gitignored runtime files (`config/config.php`, logs, cached images) are left untouched on the NAS. The first page load or cron run after deploying this change migrates an existing `config/config.json` to `config/config.php` and deletes the old file. Right after the pull, follow "Upgrading an Existing Install" in `INSTALL.md` (load the This Day page first, check `ls -la config/ logs/`, delete the old `logs/app.log`, run the refresh once as the Task Scheduler user).
+
 ## File Permissions Requirements
 
 ```bash
 # Application directory
-chmod 755 /volume1/web/rediscover-this-day
+chmod 755 /volume2/web/rediscover-this-day
 
 # Writable directories (required)
 chmod 777 config/
 chmod 777 cache/
 chmod 777 logs/
 
-# Configuration file (after creation)
-chmod 666 config/config.json
+# Configuration file (after creation; writes are atomic renames, so the
+# directory permissions above are what matters)
+chmod 666 config/config.php
+
+# logs/app.log.php is created 0666 automatically so both the cron user
+# (possibly root) and the web user can append
 ```
 
 ## Configuration Reference
@@ -321,6 +354,8 @@ See `config/config.default.json` for complete configuration structure.
 - `photos.first_year`: Earliest year to include (default: 2010)
 - `slideshow.duration`: Photo display duration in seconds (default: 5)
 - `slideshow.transition`: Transition effect (`fade` or `none`)
+- `year_review.enable_feature`: Shows the Year in Review link in admin (does not block access to `year-review.php`)
+- `year_review.photos_per_year`, `year_review.selection_strategy`, `year_review.stat_frequency`: Saved by the admin form but currently unused since the "Places Explored" rework
 - `admin.username`: Admin username (default: `admin`)
 - `admin.password_hash`: Bcrypt hash of admin password
 - `debug.log_level`: Logging level (`DEBUG`, `INFO`, `WARNING`, `ERROR`)
@@ -342,11 +377,17 @@ See `config/config.default.json` for complete configuration structure.
 - **Plain-text passwords**: Synology credentials stored unencrypted in config file
 - **Single user**: Admin interface supports one admin account only
 - **No photo upload**: Application is read-only from Synology Photos
-- **Daily refresh only**: No real-time photo updates (by design)
+- **Daily refresh only**: No real-time photo updates for This Day (by design)
+- **Year in Review is slow and uncached**: `api/year_photos.php` fetches the whole year live from Synology on every request (`set_time_limit(300)`, 60s client timeout) and re-downloads every thumbnail
+- **CDN dependency**: Year in Review's grid needs internet access for jQuery/justifiedGallery
 - **No mobile admin optimization**: Admin interface is functional but not mobile-first
 
 ### Recent Changes (Git History)
 
+- **bc0d5ca**: Thumbnail downloads use `unit_id` (required alongside `cache_key`)
+- **70caab4**: Fixed Year in Review photo matching
+- **04d0dbe**: Added Year in Review feature with location-based statistics
+- **c3ab502**: Added photo tags display in lower-left corner
 - **f68865f**: Separated county and state into their own rows (location metadata)
 - **ca42ccc**: Changed `const` to `var` for legacy iPad 2 compatibility
 - **fb53cd6**: Separated CSS files (slideshow.css and admin.css)
@@ -357,6 +398,16 @@ See `config/config.default.json` for complete configuration structure.
 
 **Why iPad 2 compatibility?**
 The original device this was designed for is an iPad 2 running iOS 9.3.5 (last supported version). This device cannot run modern browsers, so ES5 JavaScript and basic CSS are required.
+
+**How the iPad launches the app (Home Screen web app)**
+On the iPad, the app was set up by browsing to the URL in Safari and choosing **Add to Home Screen**. The user then launches it from the Home Screen icon, which opens it full screen (standalone mode, enabled by the `apple-mobile-web-app-capable` meta tags in `index.php`, `year-review.php` and `year-slideshow.php`). Implications for changes:
+- There's no Safari address bar, back button or reload button. Every page needs its own on-screen way to navigate (e.g. the slideshow's back button), and an error screen needs a link out.
+- The saved URL (exact value in the gitignored `CLAUDE.local.md`) is plain HTTP on the NAS's LAN IP, in the `/rediscover-this-day/` subdirectory, and resolves to `index.php` through `DirectoryIndex`. The icon always opens this URL, so it must keep serving the This Day slideshow. Moving the folder, changing the NAS IP or forcing HTTPS means re-adding the icon on the iPad.
+- Because the app lives under `/rediscover-this-day/`, keep URLs relative (`css/…`, `year-review.php`, `../index.php`). Root-relative paths (`/css/…`) would break.
+- Navigate between pages with `window.location.href` from JS. On older iOS, plain `<a href>` links in a standalone web app can open in Safari instead of staying full screen. Verify any new link from the Home Screen icon.
+- New pages meant for the iPad need the same `apple-mobile-web-app-*` meta tags.
+- Year in Review was originally meant to be its own second Home Screen icon (saved at `year-review.php`). A link to it from the This Day slideshow is also under consideration. Either way, navigating from the year picker to `year-slideshow.php` and back must stay full screen.
+- Test from the Home Screen icon, not just a Safari tab. Behavior and caching differ between the two.
 
 **Why PHP instead of Python?**
 Synology NAS has PHP support built-in via Web Station, making deployment simpler than setting up Python.
@@ -369,6 +420,15 @@ Synology NAS has PHP support built-in via Web Station, making deployment simpler
 
 **Why daily refresh?**
 Photos for "this day" only change once per day (at midnight), so real-time updates aren't necessary. This reduces server load and complexity.
+
+**How Year in Review works**
+`year-review.php` lists years from `photos.first_year` to the current year. `year-slideshow.php?year=YYYY` calls `api/year_photos.php` via XHR. The endpoint:
+1. Fetches every photo for the year.
+2. Groups photos by month, then by country/state/city from `additional.address`.
+3. Picks up to 9 photos per location and downloads thumbnails to `cache/year_review/`.
+4. Returns `{ year_summary, months: [{ summary, location_slides }] }`.
+
+`js/year-slideshow.js` then plays the slides in order: the year summary, then each month's summary followed by that month's location grids.
 
 ### Architecture Decisions
 
@@ -397,7 +457,9 @@ Photos for "this day" only change once per day (at midnight), so real-time updat
 - **Main README**: [README.md](README.md) - User-facing documentation
 - **Requirements**: [rediscover_requirements.md](rediscover_requirements.md) - Original project specification
 - **Installation**: See README.md Installation section
-- **API Reference**: Synology Photos API documentation in [Documentation/](Documentation/)
+- **Configuration**: [CONFIG.md](CONFIG.md) · **Install**: [INSTALL.md](INSTALL.md) · **Test checklist**: [TESTING.md](TESTING.md)
+- **API Reference**: [Synology_File_Station_API_Guide.pdf](Synology_File_Station_API_Guide.pdf); the Photos API wrapper is based on github.com/zeichensatz/SynologyPhotosAPI
+- **Dev team pipeline**: [.claude/CLAUDE.md](.claude/CLAUDE.md)
 
 ## Future Enhancement Ideas (Not Implemented)
 

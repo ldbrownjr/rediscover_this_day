@@ -10,17 +10,26 @@ $messageType = '';
 
 // Handle form submission
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $action = $_POST['action'] ?? '';
+    $action = '';
     
-    // Determine action based on which button was clicked
-    if (isset($_POST['save_config'])) {
-        $action = 'save_config';
-    } elseif (isset($_POST['change_password'])) {
-        $action = 'change_password';
-    } elseif (isset($_POST['test_connection'])) {
-        $action = 'test_connection';
-    } elseif (isset($_POST['refresh_now'])) {
-        $action = 'refresh_now';
+    if (!verifyCsrf()) {
+        // Missing/stale token: don't dispatch anything
+        logMessage('Admin POST rejected: missing or invalid CSRF token', 'WARNING');
+        $message = 'Session expired, please try again';
+        $messageType = 'error';
+    } else {
+        $action = $_POST['action'] ?? '';
+        
+        // Determine action based on which button was clicked
+        if (isset($_POST['save_config'])) {
+            $action = 'save_config';
+        } elseif (isset($_POST['change_password'])) {
+            $action = 'change_password';
+        } elseif (isset($_POST['test_connection'])) {
+            $action = 'test_connection';
+        } elseif (isset($_POST['refresh_now'])) {
+            $action = 'refresh_now';
+        }
     }
     
     if ($action === 'save_config') {
@@ -93,9 +102,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
     elseif ($action === 'test_connection') {
-        // Debug: Output that we reached this point
-        error_log('DEBUG: Starting test_connection action');
-        
         if (empty($config['synology']['url']) || empty($config['synology']['username']) || empty($config['synology']['password'])) {
             $message = 'Please configure Synology connection settings first';
             $messageType = 'error';
@@ -103,25 +109,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } else {
             try {
                 logMessage('Testing connection to: ' . $config['synology']['url'], 'INFO');
-                error_log('DEBUG: Config loaded, URL: ' . $config['synology']['url']);
                 
                 // Check if SynologyAPI class exists
                 if (!class_exists('SynologyAPI')) {
                     require_once '../api/synology.php';
                     logMessage('Loaded SynologyAPI class', 'DEBUG');
-                    error_log('DEBUG: SynologyAPI class loaded');
                 }
                 
-                error_log('DEBUG: Creating SynologyAPI object');
                 $api = new SynologyAPI(
                     $config['synology']['url'],
                     $config['synology']['username'],
                     $config['synology']['password']
                 );
                 logMessage('SynologyAPI object created successfully', 'DEBUG');
-                error_log('DEBUG: SynologyAPI object created');
                 
-                error_log('DEBUG: Calling testConnection');
                 if ($api->testConnection()) {
                     $message = 'Connection successful!';
                     $messageType = 'success';
@@ -132,16 +133,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $messageType = 'error';
                     logMessage('Synology connection test failed - testConnection returned false', 'ERROR');
                 }
-            } catch (Exception $e) {
-                $message = 'Connection test error: ' . $e->getMessage();
-                $messageType = 'error';
-                logMessage('Synology connection test exception: ' . $e->getMessage(), 'ERROR');
-                error_log('SynologyAPI test connection error: ' . $e->getMessage());
             } catch (Throwable $t) {
-                $message = 'Connection test fatal error: ' . $t->getMessage();
+                // Details (redacted) go to the log only, never to the page
+                $message = 'Connection test failed (see log)';
                 $messageType = 'error';
-                logMessage('Synology connection test throwable: ' . $t->getMessage(), 'ERROR');
-                error_log('SynologyAPI test connection throwable: ' . $t->getMessage());
+                logMessage('Synology connection test error: ' . redactSecrets($t->getMessage()), 'ERROR');
             }
         }
     }
@@ -186,6 +182,7 @@ $lastRefresh = getLastRefreshInfo();
             <div class="header-actions">
                 <a href="../index.php" class="btn btn-secondary" target="_blank">View Slideshow</a>
                 <form method="POST" action="logout.php" style="display: inline;">
+                    <?php echo csrfField(); ?>
                     <button type="submit" class="btn btn-secondary">Logout</button>
                 </form>
             </div>
@@ -198,6 +195,7 @@ $lastRefresh = getLastRefreshInfo();
         <?php endif; ?>
         
         <form method="POST" action="index.php">
+        <?php echo csrfField(); ?>
         <div class="admin-content">
             <!-- Top Row: Status and Synology Connection -->
             <div class="admin-grid">

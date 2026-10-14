@@ -20,7 +20,6 @@ fix. Plan anything non-trivial with the architect first (see
   - After deploying, check `ls -l cache/` once after a cron run and once after
     an admin refresh.
   - Mention the requirement in `INSTALL.md` and `TESTING.md`.
-- **S3. `_sid` still reaches `logs/app.log`.** See M4.
 - **S4. Leftover temp files.** A killed write leaves `.<name>.<hex>.tmp` in
   `cache/` or `config/` forever.
   - Fix: have `cleanOrphanedCache()` also remove `.tmp` files older than an
@@ -45,30 +44,49 @@ fix. Plan anything non-trivial with the architect first (see
 
 ## Batch 2: Security
 
-- **H1. Unauthenticated refresh trigger.** `cron/daily_refresh.php?run` lets
-  anyone on the LAN trigger a refresh.
-  - Fix: make it CLI-only, or require admin.
-- **H2. No CSRF protection on admin forms.** A malicious page could change the
-  Synology URL, and the next refresh would send the Synology password there.
-  - Fix: add a session CSRF token to the forms and set
-    `session.cookie_samesite=Strict`.
-- **H7. Config and logs may be web-readable.** `config/`, `logs/` and `.git/`
-  are protected only by Apache `.htaccess` rules.
-  - First confirm whether Web Station serves this site with Apache or Nginx.
-- **M4. Synology session IDs (`_sid`) in `logs/app.log`.** Sources in
-  `api/synology.php`:
-  - `API Request params` logs the full `_sid` at INFO.
-  - The download URL is logged at DEBUG.
-  - Guzzle error messages in `makeRequest()` and `downloadFile()` include it.
+Done: H1, H2, H7 (guarded `config/config.php` and `logs/app.log.php`), M4/S3,
+M5, M10 and L14.
 
-  Fix: redact `_sid` before logging.
-- **M5. Login hardening.**
-  - Call `session_regenerate_id(true)` on login.
-  - Set the cookie and session options in PHP code, because the `mod_php`
-    `.htaccess` block doesn't apply under PHP-FPM.
-  - Optional: throttle login attempts.
-- **M10. `test_api.php` is reachable from the web without login.**
-  - Fix: allow it to run only from the CLI.
+- **Nginx deny rules.** Web Station serves this site with Nginx, so
+  `.htaccess` is ignored. Deny rules for `config/`, `logs/`, `cron/`,
+  `vendor/`, `.git`, `test_api.php`, dotfiles, `*.md`, `composer.*` and
+  `Synology_File_Station_API_Guide.pdf` live in
+  `/usr/local/etc/nginx/conf.d/www.rediscover-this-day.conf` on the NAS (see
+  `INSTALL.md`). DSM / Web Station updates can drop this file, so re-verify it
+  after every update with the status-code check in `TESTING.md`.
+- **Follow-ups from the Batch 2 review:**
+  - **Redaction gaps.** `redactSecrets()` doesn't cover:
+    - URL-encoded keys (`%3F_sid%3D`);
+    - escaped quotes inside JSON values;
+    - truncated JSON with no closing quote (`synology.php` logs
+      `substr($body, 0, 200)`);
+    - `print_r` / `var_export` output, `SynoToken`, or `user:pass@host` URLs.
+
+    None of these appeared in real logs.
+  - **Redundant migrations.** When many requests arrive at once on the first
+    load, each one migrates again and logs an INFO line. They all write the same
+    data. In theory, a late migration could overwrite a Save made in between.
+    Fix: make the migration write create-only, like the seed.
+  - **Repeated ERRORs when `config/` isn't writable.** A failed migration
+    logs 2 ERRORs on every request, because the retry guard only lasts for one
+    process. Use a marker file, or log later failures at WARNING.
+  - **First log line can miss the guard.** When `logs/app.log.php` is first
+    created, a concurrent append can land before the guard line. Fix: write the
+    guard to a temp file and rename it into place.
+  - **Sessions start for CLI scripts.** `startAppSession()` also runs for the
+    cron and `test_api.php`, creating session files (owned by root if the cron
+    runs as root). Fix: skip it when `PHP_SAPI === 'cli'`.
+  - **Session lock blocks the back button.** `api/year_photos.php` holds the
+    session lock for up to 300s, so the iPad's back button can hang while a
+    year loads. Fix: call `session_write_close()` in the `api/*.php` endpoints
+    and on the other non-admin pages.
+  - **Wrong JSON error message.** `json_last_error_msg()` is read after a
+    `logMessage()` call that decodes JSON again, so the log says "JSON decode
+    error: No error".
+  - **Agent files are out of date.** `.claude/agents/*.md` still mention
+    `config/config.json`, `logs/app.log` and `/volume1`.
+  - **Not tested:** the root `chown` path in `migrateLegacyConfig()`, and the
+    code on a real PHP 8.2 (only 8.4 is installed locally).
 
 ## Batch 3: Year in Review (uncommitted work)
 
@@ -116,15 +134,13 @@ fix. Plan anything non-trivial with the architect first (see
   `autocomplete="new-password"`.
 - **L4. Default credentials shown.** The login page shows the default
   `admin`/`password` credentials, which are recreated automatically if
-  `config.json` is missing.
+  `config/config.php` is missing.
 - **L5. Comment before the doctype.** `admin/index.php` outputs a debug comment
   before `<!DOCTYPE>`.
 - **L6. Year in Review admin link hidden by default.** The checkbox uses
   `?? true`, but the link uses `isset`.
 - **L13. Year picker CSS is never cached.** `year-review.php` uses `time()` as
   the cache-buster. Use `filemtime`.
-- **L14. Raw username in the log.** `admin/login.php` logs the username as
-  entered, which allows log injection.
 - **L16. `index.php` assumes `$config['slideshow']` exists.** Related to N4.
 
 ## Testing infrastructure

@@ -26,7 +26,7 @@ A nostalgic photo slideshow application that displays photos from previous years
 
 Upload all files to your Synology web directory, for example:
 
-- `/volume1/web/rediscover-this-day/`
+- `/volume2/web/rediscover-this-day/`
 
 Or set up a virtual host in **Web Station**.
 
@@ -35,20 +35,17 @@ Or set up a virtual host in **Web Station**.
 Ensure the web server can write to these directories:
 
 ```bash
-chmod 755 /volume1/web/rediscover-this-day
-chmod 777 /volume1/web/rediscover-this-day/config
-chmod 777 /volume1/web/rediscover-this-day/cache
-chmod 777 /volume1/web/rediscover-this-day/logs
+chmod 755 /volume2/web/rediscover-this-day
+chmod 777 /volume2/web/rediscover-this-day/config
+chmod 777 /volume2/web/rediscover-this-day/cache
+chmod 777 /volume2/web/rediscover-this-day/logs
 ```
 
 ### 3. Initial Configuration
 
-1. Copy the default configuration:
-
-   ```bash
-   cp config/config.default.json config/config.json
-   chmod 666 config/config.json
-   ```
+1. No copy is needed: the first page load creates `config/config.php` from
+   `config/config.default.json`. (An existing `config/config.json` from an
+   older install is migrated to `config/config.php` and deleted automatically.)
 
 2. The default admin credentials are:
 
@@ -120,7 +117,7 @@ To automatically refresh photos daily:
    - **Schedule**: Daily at your preferred time (e.g., 00:00)
    - **User-defined script**:
      ```bash
-     /usr/bin/php /volume1/web/rediscover-this-day/cron/daily_refresh.php
+     /usr/bin/php /volume2/web/rediscover-this-day/cron/daily_refresh.php
      ```
 4. Click **OK** to save
 
@@ -135,7 +132,7 @@ sudo -u http crontab -e
 Add this line (replace path as needed):
 
 ```
-0 0 * * * /usr/bin/php /volume1/web/rediscover-this-day/cron/daily_refresh.php
+0 0 * * * /usr/bin/php /volume2/web/rediscover-this-day/cron/daily_refresh.php
 ```
 
 ### 6. First Photo Refresh
@@ -195,19 +192,19 @@ rediscover-this-day/
 │   ├── .htaccess       # Allow public access to images
 │   └── *.jpg           # Cached photo files
 ├── config/             # Configuration
-│   ├── config.json     # Active configuration (created on install)
+│   ├── config.php      # Active configuration: guard line + JSON (created on first load)
 │   ├── config.default.json  # Default configuration template
-│   └── .htaccess       # Protect config from web access
+│   └── .htaccess       # Apache only (Nginx ignores it)
 ├── cron/               # Scheduled tasks
-│   └── daily_refresh.php  # Daily photo refresh script
+│   └── daily_refresh.php  # Daily photo refresh script (CLI only)
 ├── css/                # Stylesheets
 │   ├── admin.css       # Admin interface styles
 │   └── slideshow.css   # Slideshow styles
 ├── js/                 # JavaScript
 │   └── slideshow.js    # Slideshow logic (ES5 compatible)
 ├── logs/               # Application logs
-│   ├── app.log         # Main log file
-│   └── .htaccess       # Protect logs from web access
+│   ├── app.log.php     # Main log file (first line is a 404 guard)
+│   └── .htaccess       # Apache only (Nginx ignores it)
 ├── common.php          # Common functions and utilities
 ├── index.php           # Main slideshow page
 ├── .gitignore          # Git ignore rules
@@ -219,7 +216,7 @@ rediscover-this-day/
 ### No photos showing
 
 1. Check admin interface → Status section for last refresh info
-2. Check logs: `logs/app.log`
+2. Check logs: `logs/app.log.php`
 3. Verify Synology connection in admin (Test Connection button)
 4. Manually trigger refresh from admin interface
 5. Ensure photos exist for today's date in previous years
@@ -245,12 +242,13 @@ rediscover-this-day/
 2. Check task logs in Synology Task Scheduler
 3. Verify PHP path: `which php`
 4. Test script manually: `php cron/daily_refresh.php`
-5. Check logs: `logs/app.log`
+5. Check logs: `logs/app.log.php`
 
 ### Admin login not working
 
-1. Verify `config/config.json` exists
-2. Reset to default password by editing `config/config.json`:
+1. Verify `config/config.php` exists
+2. Reset to default password by editing `config/config.php` (keep its first
+   `<?php ... ?>` guard line intact):
    ```json
    "admin": {
      "username": "admin",
@@ -270,9 +268,16 @@ rediscover-this-day/
 
 - Default password is `password` - **change it immediately!**
 - Configuration file stores Synology password in plain text - ensure file permissions are secure
-- Admin session uses PHP sessions - cookies are required
+- Admin session uses PHP sessions - cookies are required (`HttpOnly`,
+  `SameSite=Strict`; `Secure` is added automatically when served over HTTPS)
+- Admin forms carry a CSRF token; logout requires a POST with the token
 - Consider using HTTPS for admin access
-- `config/` and `logs/` directories are protected by `.htaccess` files
+- `config/config.php` and `logs/app.log.php` start with a guard line, so a
+  direct web request returns an empty 404 on any web server
+- Synology session IDs and passwords are redacted before anything is logged
+- `cron/daily_refresh.php` and `test_api.php` only run from the command line
+- On Nginx (Web Station), `.htaccess` files are ignored; see "Block
+  Non-Public Files (Nginx)" in `INSTALL.md` for the deny rules
 
 ## API Reference
 
@@ -290,7 +295,7 @@ For more details, see: https://github.com/zeichensatz/SynologyPhotosAPI
 ### Change Slideshow Duration
 
 1. Admin interface → Slideshow Settings → Photo Duration
-2. Or edit `config/config.json`:
+2. Or edit `config/config.php` (keep the first guard line):
    ```json
    "slideshow": {
      "duration": 10
@@ -324,7 +329,7 @@ Edit CSS files:
 For issues or questions:
 
 1. Check the troubleshooting section above
-2. Review logs in `logs/app.log`
+2. Review logs in `logs/app.log.php`
 3. Verify configuration in admin interface
 4. Test Synology API connection manually
 

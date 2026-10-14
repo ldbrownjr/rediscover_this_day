@@ -4,20 +4,19 @@
  * This script fetches photos from Synology Photos for the current calendar date
  * and caches them locally for the slideshow.
  * 
- * Can be run manually or via cron job.
+ * Run from the command line / Task Scheduler, or via the admin "Refresh Now" button.
  */
 
-// Allow running from command line or web
-if (php_sapi_name() === 'cli') {
-    // Running from command line
-    if (!defined('BASE_PATH')) {
-        define('BASE_PATH', dirname(__DIR__));
-    }
-} else {
-    // Running from web (for manual refresh)
-    if (!defined('BASE_PATH')) {
-        define('BASE_PATH', dirname(__DIR__));
-    }
+// CLI only: requested directly over the web, return an empty 404. (admin/index.php
+// require_once's this file for "Refresh Now"; that still works because the
+// requested script is then admin/index.php.)
+if (PHP_SAPI !== 'cli' && realpath($_SERVER['SCRIPT_FILENAME'] ?? '') === __FILE__) {
+    http_response_code(404);
+    exit;
+}
+
+if (!defined('BASE_PATH')) {
+    define('BASE_PATH', dirname(__DIR__));
 }
 
 require_once BASE_PATH . '/common.php';
@@ -286,27 +285,25 @@ function cleanOrphanedCache(array $keepFilenames): int {
     return $deleted;
 }
 
-// Main execution
-if (php_sapi_name() === 'cli' || (isset($_SERVER['REQUEST_METHOD']) && isset($_GET['run']))) {
+// Main execution (CLI only)
+if (PHP_SAPI === 'cli') {
     // Perform refresh (cleans orphaned images itself, after a successful save)
     $result = performDailyRefresh();
     
     // Output result
-    if (php_sapi_name() === 'cli') {
-        echo "Daily refresh completed\n";
-        echo "Success: " . (!empty($result['success']) ? 'Yes' : 'No') . "\n";
-        
-        if (!empty($result['success'])) {
-            echo 'Photos cached: ' . ($result['count'] ?? 0) . ' of ' . ($result['total'] ?? 0) . "\n";
-            echo 'Duration: ' . ($result['duration'] ?? 0) . "s\n";
-            if (!empty($result['partial'])) {
-                $failedYears = $result['failed_years'] ?? [];
-                echo 'Partial: yes (' . count($failedYears) . " year(s) could not be queried)\n";
-            }
-        } else {
-            echo 'Error: ' . ($result['error'] ?? 'Unknown error') . "\n";
+    echo "Daily refresh completed\n";
+    echo "Success: " . (!empty($result['success']) ? 'Yes' : 'No') . "\n";
+    
+    if (!empty($result['success'])) {
+        echo 'Photos cached: ' . ($result['count'] ?? 0) . ' of ' . ($result['total'] ?? 0) . "\n";
+        echo 'Duration: ' . ($result['duration'] ?? 0) . "s\n";
+        if (!empty($result['partial'])) {
+            $failedYears = $result['failed_years'] ?? [];
+            echo 'Partial: yes (' . count($failedYears) . " year(s) could not be queried)\n";
         }
-        
-        exit(!empty($result['success']) ? 0 : 1);
+    } else {
+        echo 'Error: ' . ($result['error'] ?? 'Unknown error') . "\n";
     }
+    
+    exit(!empty($result['success']) ? 0 : 1);
 }

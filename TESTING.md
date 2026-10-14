@@ -19,7 +19,13 @@ Use this checklist to verify the application is working correctly.
 
 - [ ] Files uploaded to web directory
 - [ ] Directory permissions set correctly (777 for config, cache, logs)
-- [ ] `config/config.json` created from default
+- [ ] `config/config.php` created from default on first page load (or an existing
+  `config/config.json` migrated to it and deleted)
+- [ ] Upgrade only: right after `git pull`, follow "Upgrading an Existing Install"
+  in `INSTALL.md`: load `admin/` in a browser first (the web user does the
+  migration), check `ls -la config/ logs/`, delete the old `logs/app.log`
+  (it contains historical session IDs), then run the refresh task once as the
+  Task Scheduler user and confirm admin still loads and saves
 - [ ] Can access main page: `http://NAS-IP/rediscover-this-day/`
 - [ ] Can access admin login: `http://NAS-IP/rediscover-this-day/admin/`
 
@@ -28,7 +34,8 @@ Use this checklist to verify the application is working correctly.
 ### Login
 
 - [ ] Can login with default credentials (admin/password)
-- [ ] Invalid credentials show error message
+- [ ] Invalid credentials show error message (after a ~1 second delay)
+- [ ] Submitting a login form left open across a session reset shows "Session expired, please try again"
 - [ ] Successful login redirects to admin dashboard
 
 ### Synology Connection
@@ -136,7 +143,7 @@ Use this checklist to verify the application is working correctly.
   php cron/daily_refresh.php
   ```
 - [ ] Script completes without errors
-- [ ] Script logs to `logs/app.log`
+- [ ] Script logs to `logs/app.log.php`
 - [ ] Photos are downloaded to `cache/`
 - [ ] `cache/photos.json` is created/updated
 - [ ] Old cache files are cleaned up
@@ -184,6 +191,22 @@ Use this checklist to verify the application is working correctly.
 - [ ] Admin area requires login
 - [ ] Direct access to admin/index.php redirects to login
 - [ ] Session expires after logout
+- [ ] Logout only works via the Logout button (a GET to `admin/logout.php` just redirects)
+- [ ] An admin POST without the `csrf_token` field is rejected with "Session expired, please try again" and changes nothing
+- [ ] Session cookie has `HttpOnly` and `SameSite=Strict` (no `Secure` on plain HTTP)
+- [ ] Status codes from another machine on the LAN (expect 403 from the Nginx
+  deny rules, or 404 with an empty body from a guarded `.php` file; never 200):
+  ```bash
+  B=http://NAS-IP/rediscover-this-day
+  for u in config/config.php config/config.json config/config.default.json \
+           logs/app.log.php logs/app.log \
+           cron/daily_refresh.php "cron/daily_refresh.php?run" test_api.php \
+           README.md composer.json vendor/autoload.php .git/HEAD .gitignore; do
+    printf '%s -> ' "$u"; curl -s -o /dev/null -w '%{http_code}\n' "$B/$u"
+  done
+  ```
+  `index.php`, `admin/login.php`, `api/photos.php` and `cache/photos.json` should still return 200.
+  Re-run after DSM / Web Station updates.
 - [ ] config/ directory not accessible via web
 - [ ] logs/ directory not accessible via web
 - [ ] cache/ directory allows image access only
@@ -235,7 +258,8 @@ Use this checklist to verify the application is working correctly.
 
 ## Log File Tests
 
-- [ ] `logs/app.log` is created
+- [ ] `logs/app.log.php` is created, and its first line is the 404 guard
+- [ ] No `_sid=`, `sid=` or `passwd=` values in the log (only `[redacted]`)
 - [ ] Login attempts are logged
 - [ ] Configuration changes are logged
 - [ ] Refresh operations are logged

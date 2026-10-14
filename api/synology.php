@@ -144,8 +144,6 @@ class SynologyAPI {
             throw new Exception('Synology login failed');
         }
         
-        logMessage("Logged in successfully, SID: " . substr($this->sid, 0, 10) . "...", 'INFO');
-        
         $allPhotos = [];
         $failedYears = [];
         $yearsQueried = 0;
@@ -222,7 +220,9 @@ class SynologyAPI {
         ];
         
         logMessage("API Request URL: {$url}", 'INFO');
-        logMessage("API Request params: " . json_encode($params), 'INFO');
+        $logParams = $params;
+        unset($logParams['_sid']);
+        logMessage("API Request params: " . json_encode($logParams), 'DEBUG');
         
         $response = $this->makeRequest($url, $params);
         
@@ -375,7 +375,7 @@ class SynologyAPI {
         $url = $this->getThumbnailUrl($photoId, $cacheKey, $size, $unitId);
         
         $imageData = $this->downloadFile($url);
-        logMessage('DowloadFile Url: ' . $url, 'DEBUG');
+        logMessage('DowloadFile Url: ' . redactSecrets($url), 'DEBUG');
         
         if ($imageData) {
             $filename = $photoId . '_' . $size . '.jpg';
@@ -464,15 +464,15 @@ class SynologyAPI {
             return $decoded;
 
         } catch (\GuzzleHttp\Exception\RequestException $e) {
-            $errorMsg = $e->getMessage();
+            $errorMsg = redactSecrets($e->getMessage());
             logMessage("Guzzle Request Error: $errorMsg", 'ERROR');
             throw new Exception("Request Error: $errorMsg");
         } catch (\GuzzleHttp\Exception\ConnectException $e) {
-            $errorMsg = $e->getMessage();
+            $errorMsg = redactSecrets($e->getMessage());
             logMessage("Guzzle Connection Error: $errorMsg", 'ERROR');
             throw new Exception("Connection Error: $errorMsg");
         } catch (\Exception $e) {
-            $errorMsg = $e->getMessage();
+            $errorMsg = redactSecrets($e->getMessage());
             logMessage("Guzzle Error: $errorMsg", 'ERROR');
             throw new Exception("HTTP Error: $errorMsg");
         }
@@ -493,7 +493,7 @@ class SynologyAPI {
             return $response->getBody()->getContents();
 
         } catch (\Exception $e) {
-            logMessage("Download Error: " . $e->getMessage(), 'ERROR');
+            logMessage("Download Error: " . redactSecrets($e->getMessage()), 'ERROR');
             return null;
         }
     }

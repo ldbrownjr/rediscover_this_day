@@ -1,5 +1,7 @@
 # Configuration files with sensitive data
 config/config.json
+config/config.php
+config/*.backup*
 
 # Cache files
 cache/photos.json
@@ -9,6 +11,7 @@ cache/*.png
 
 # Log files
 logs/*.log
+logs/*.log.php
 
 # Admin session data
 admin/sessions.json
@@ -28,5 +31,6 @@ Thumbs.db
 CLAUDE.local.md
 .claude/settings.local.json
 
-# Atomic-write temp files
+# Atomic-write temp files (*.tmp also matches dotfiles such as cache/.photos.json.x.tmp)
 *.tmp
+config/.*.tmp
