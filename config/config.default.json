@@ -12,10 +12,7 @@
     "transition": "fade"
   },
   "year_review": {
-    "selection_strategy": "even_distribution",
-    "photos_per_year": 52,
-    "enable_feature": true,
-    "stat_frequency": 8
+    "enable_feature": true
   },
   "admin": {
     "username": "admin",

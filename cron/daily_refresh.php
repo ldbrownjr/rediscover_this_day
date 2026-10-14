@@ -304,6 +304,15 @@ if (PHP_SAPI === 'cli') {
     } else {
         echo 'Error: ' . ($result['error'] ?? 'Unknown error') . "\n";
     }
-    
+
+    // Year in Review thumbnail cleanup (nightly, CLI only; no Synology calls).
+    // Never affects the exit code, which reflects This Day only.
+    try {
+        require_once BASE_PATH . '/api/year_review_lib.php';
+        cleanYearReviewCache();
+    } catch (Throwable $t) {
+        logMessage('Year in Review cache cleanup failed: ' . redactSecrets($t->getMessage()), 'WARNING');
+    }
+
     exit(!empty($result['success']) ? 0 : 1);
 }

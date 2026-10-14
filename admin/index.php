@@ -1,6 +1,7 @@
 <?php
 require_once '../common.php';
 require_once '../api/synology.php';
+require_once __DIR__ . '/../api/year_review_lib.php';
 
 requireAdmin();
 
@@ -29,6 +30,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $action = 'test_connection';
         } elseif (isset($_POST['refresh_now'])) {
             $action = 'refresh_now';
+        } elseif (isset($_POST['clear_year_review_cache'])) {
+            $action = 'clear_year_review_cache';
         }
     }
     
@@ -54,9 +57,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $config['year_review'] = [];
         }
         $config['year_review']['enable_feature'] = isset($_POST['year_review_enabled']);
-        $config['year_review']['photos_per_year'] = (int)$_POST['photos_per_year'];
-        $config['year_review']['selection_strategy'] = $_POST['selection_strategy'];
-        $config['year_review']['stat_frequency'] = (int)$_POST['stat_frequency'];
+        // Settings no longer used since the "Places Explored" rework
+        unset(
+            $config['year_review']['photos_per_year'],
+            $config['year_review']['selection_strategy'],
+            $config['year_review']['stat_frequency']
+        );
 
         // Update debug settings
         $config['debug']['log_level'] = $_POST['log_level'];
@@ -157,6 +163,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } else {
             $message = 'Refresh failed: ' . ($result['error'] ?? 'Unknown error');
             $messageType = 'error';
+        }
+    }
+    elseif ($action === 'clear_year_review_cache') {
+        $result = clearYearReviewCache();
+        $message = "Cleared {$result['deleted']} files";
+        if ($result['session_cleared']) {
+            $message .= ' (including the shared Synology session)';
+        }
+        if ($result['failed'] > 0) {
+            $message .= " ({$result['failed']} could not be deleted)";
+            $messageType = 'error';
+        } else {
+            $messageType = 'success';
         }
     }
     
@@ -290,43 +309,10 @@ $lastRefresh = getLastRefreshInfo();
                     <div class="form-group">
                         <label>
                             <input type="checkbox" id="year_review_enabled" name="year_review_enabled"
-                                   <?php echo ($config['year_review']['enable_feature'] ?? true) ? 'checked' : ''; ?>>
+                                   <?php echo isYearReviewEnabled($config) ? 'checked' : ''; ?>>
                             Enable Year Review Feature
                         </label>
                         <small>Allows viewing photo highlights from selected years</small>
-                    </div>
-
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label for="photos_per_year">Photos Per Year:</label>
-                            <input type="number" id="photos_per_year" name="photos_per_year"
-                                   value="<?php echo h($config['year_review']['photos_per_year'] ?? 52); ?>"
-                                   min="10" max="200">
-                            <small>Number of highlights to select (10-200)</small>
-                        </div>
-
-                        <div class="form-group">
-                            <label for="stat_frequency">Stat Frequency:</label>
-                            <input type="number" id="stat_frequency" name="stat_frequency"
-                                   value="<?php echo h($config['year_review']['stat_frequency'] ?? 8); ?>"
-                                   min="5" max="20">
-                            <small>Photos between stat slides (5-20)</small>
-                        </div>
-                    </div>
-
-                    <div class="form-group">
-                        <label for="selection_strategy">Selection Strategy:</label>
-                        <select id="selection_strategy" name="selection_strategy">
-                            <option value="even_distribution"
-                                <?php echo ($config['year_review']['selection_strategy'] ?? 'even_distribution') === 'even_distribution' ? 'selected' : ''; ?>>
-                                Even Distribution
-                            </option>
-                            <option value="random"
-                                <?php echo ($config['year_review']['selection_strategy'] ?? '') === 'random' ? 'selected' : ''; ?>>
-                                Random Sampling
-                            </option>
-                        </select>
-                        <small>How to select highlight photos</small>
                     </div>
                 </section>
             </div>
@@ -353,7 +339,7 @@ $lastRefresh = getLastRefreshInfo();
                     <h3>Quick Links</h3>
                     <div class="quick-links">
                         <a href="../index.php" class="btn btn-secondary">This Day Slideshow</a>
-                        <?php if (isset($config['year_review']['enable_feature']) && $config['year_review']['enable_feature']): ?>
+                        <?php if (isYearReviewEnabled($config)): ?>
                             <a href="../year-review.php" class="btn btn-secondary">Year in Review</a>
                         <?php endif; ?>
                     </div>
@@ -392,6 +378,17 @@ $lastRefresh = getLastRefreshInfo();
             </section>
         </div>
         </form>
+
+        <!-- Separate form so Enter in a settings field can never trigger it -->
+        <section class="admin-section compact">
+            <h3>Year in Review Cache</h3>
+            <form method="POST" action="index.php">
+                <?php echo csrfField(); ?>
+                <div class="form-actions">
+                    <button type="submit" name="clear_year_review_cache" class="btn btn-secondary btn-sm">Clear Year in Review cache</button>
+                </div>
+            </form>
+        </section>
     </div>
 </body>
 </html>
