@@ -1,4 +1,4 @@
-/* ES5-compatible Year Review Slideshow with Statistics */
+/* ES5-compatible Year Review - Places Explored */
 
 (function() {
     'use strict';
@@ -9,19 +9,6 @@
     var errorText = document.getElementById('error-text');
     var photoDisplay = document.getElementById('photo-display');
     var statDisplay = document.getElementById('stat-display');
-    var photoImg = document.getElementById('current-photo');
-    var yearSpan = document.getElementById('year');
-    var dateSpan = document.getElementById('date');
-    var locationSpan = document.getElementById('location');
-    var landmarkSpan = document.getElementById('landmark');
-    var routeSpan = document.getElementById('route');
-    var villageDistrictTownCitySpan = document.getElementById('village_district_town_city');
-    var countySpan = document.getElementById('county');
-    var stateSpan = document.getElementById('state');
-    var countrySpan = document.getElementById('country');
-    var imageCountSpan = document.getElementById('image-count');
-    var tagsLabel = document.getElementById('tags-label');
-    var tagsList = document.getElementById('tags-list');
     var statTitle = document.querySelector('.stat-title');
     var statValue = document.querySelector('.stat-value');
     var statDetail = document.querySelector('.stat-detail');
@@ -38,14 +25,14 @@
     var isPlaying = false;
     var slideshowTimer = null;
     var controlsTimer = null;
-    var stats = null;
+    var summary = null;
+    var hierarchy = null;
 
     // Config
     var duration = (config.duration || 5) * 1000;
-    var statFrequency = (yearReviewConfig.stat_frequency || 8);
 
     /**
-     * Load photos and stats from API
+     * Load photos from API
      */
     function loadPhotos() {
         var xhr = new XMLHttpRequest();
@@ -57,20 +44,20 @@
                     try {
                         var response = JSON.parse(xhr.responseText);
 
-                        if (response.success && response.photos && response.photos.length > 0) {
-                            stats = response.stats;
-                            buildSlideshow(response.photos);
+                        if (response.success && response.months && response.months.length > 0) {
+                            summary = response.year_summary;
+                            buildSlideshow(response.months);
                             loadingScreen.style.display = 'none';
                             controls.style.display = 'flex';
                             init();
                         } else {
-                            var message = response.photos && response.photos.length === 0
+                            var message = response.months && response.months.length === 0
                                 ? 'No photos found for ' + selectedYear
                                 : 'Failed to load photos';
                             showError(message);
                         }
                     } catch (e) {
-                        showError('Failed to parse response');
+                        showError('Failed to parse response: ' + e.message);
                     }
                 } else {
                     showError('Failed to load photos (HTTP ' + xhr.status + ')');
@@ -82,7 +69,7 @@
             showError('Network error - please check connection');
         };
 
-        xhr.timeout = 60000; // 60 second timeout
+        xhr.timeout = 60000;
         xhr.ontimeout = function() {
             showError('Request timed out - server may be slow');
         };
@@ -91,36 +78,28 @@
     }
 
     /**
-     * Build slideshow array with photos and stats interspersed
+     * Build slideshow array
      */
-    function buildSlideshow(photos) {
+    function buildSlideshow(months) {
         slides = [];
-
-        // Add intro stat
-        slides.push({ type: 'stat', stat: 'intro' });
-
-        // Add photos with stat slides interspersed
-        for (var i = 0; i < photos.length; i++) {
-            slides.push({ type: 'photo', photo: photos[i] });
-
-            // Add stat slide after every N photos
-            if ((i + 1) % statFrequency === 0) {
-                var statType = getNextStatType((i + 1) / statFrequency);
-                if (statType) {
-                    slides.push({ type: 'stat', stat: statType });
-                }
+        
+        // Add year summary slide first
+        slides.push({ type: 'year-summary' });
+        
+        // Add month summary and location slides for each month
+        for (var i = 0; i < months.length; i++) {
+            var month = months[i];
+            
+            // Add month summary slide
+            slides.push({ type: 'month-summary', data: month.summary });
+            
+            // Add location slides for this month
+            for (var j = 0; j < month.location_slides.length; j++) {
+                slides.push({ type: 'location', data: month.location_slides[j] });
             }
         }
     }
 
-    /**
-     * Get next stat type based on sequence
-     */
-    function getNextStatType(sequence) {
-        var statTypes = ['locations', 'most_photographed', 'top_tags', 'monthly'];
-        var index = (sequence - 1) % statTypes.length;
-        return statTypes[index];
-    }
 
     /**
      * Show error screen
@@ -144,10 +123,14 @@
         currentIndex = index;
         var slide = slides[index];
 
-        if (slide.type === 'photo') {
-            showPhotoSlide(slide.photo);
-        } else if (slide.type === 'stat') {
-            showStatSlide(slide.stat);
+        if (slide.type === 'year-summary') {
+            showYearSummarySlide();
+        } else if (slide.type === 'month-summary') {
+            showMonthSummarySlide(slide.data);
+        } else if (slide.type === 'summary') {
+            showYearSummarySlide();
+        } else if (slide.type === 'location') {
+            showLocationSlide(slide.data);
         }
 
         // Update counter
@@ -155,181 +138,149 @@
     }
 
     /**
-     * Show photo slide
+     * Show year summary slide
      */
-    function showPhotoSlide(photo) {
-        // Hide stat display, show photo display
-        statDisplay.style.display = 'none';
-        photoDisplay.style.display = 'flex';
-
-        // Apply fade transition
-        photoImg.style.opacity = '0';
-
-        setTimeout(function() {
-            updatePhotoContent(photo);
-            photoImg.style.opacity = '1';
-        }, 300);
-    }
-
-    /**
-     * Show stat slide
-     */
-    function showStatSlide(statType) {
-        // Hide photo display, show stat display
+    function showYearSummarySlide() {
         photoDisplay.style.display = 'none';
         statDisplay.style.display = 'flex';
-
-        // Apply fade transition
+        
         statDisplay.style.opacity = '0';
-
         setTimeout(function() {
-            renderStat(statType);
+            statTitle.textContent = selectedYear + ' - Places Explored';
+            
+            var summaryHtml = '<div class="summary-stats">';
+            summaryHtml += '<div>' + summary.countries + ' Countries</div>';
+            summaryHtml += '<div>' + summary.states + ' States</div>';
+            summaryHtml += '<div>' + summary.cities + ' Cities</div>';
+            summaryHtml += '<div>' + summary.total_photos + ' Photos</div>';
+            summaryHtml += '</div>';
+            
+            statValue.innerHTML = summaryHtml;
+            statDetail.textContent = 'Organized by month and location';
+            
             statDisplay.style.opacity = '1';
         }, 300);
     }
 
     /**
-     * Update photo content
+     * Show month summary slide
      */
-    function updatePhotoContent(photo) {
-        // Set image source from local cache (same as regular slideshow)
-        var imagePath = 'cache/' + photo.cached_filename;
-        photoImg.src = imagePath;
-
-        // Convert timestamp to date (same as regular slideshow)
-        var photoDate = new Date(photo.time * 1000);
-        var year = photoDate.getFullYear();
-        var monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-                          'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-        var month = monthNames[photoDate.getMonth()];
-        var day = photoDate.getDate();
-
-        // Set year
-        yearSpan.textContent = year;
-
-        // Set date (full date for year review)
-        dateSpan.textContent = month + ' ' + day + ', ' + year;
-
-        // Set location
-        var hasLocationData = (
-            (photo.landmark && photo.landmark.trim() !== '') ||
-            (photo.route && photo.route.trim() !== '') ||
-            (photo.village_district_town_city && photo.village_district_town_city.trim() !== '') ||
-            (photo.county && photo.county.trim() !== '') ||
-            (photo.state && photo.state.trim() !== '') ||
-            (photo.country && photo.country.trim() !== '')
-        );
-
-        if (!hasLocationData) {
-            locationSpan.textContent = 'Location Missing';
-        } else {
-            locationSpan.textContent = '';
-        }
-
-        landmarkSpan.textContent = photo.landmark || '';
-        routeSpan.textContent = photo.route || '';
-        villageDistrictTownCitySpan.textContent = photo.village_district_town_city || '';
-        countySpan.textContent = photo.county || '';
-        stateSpan.textContent = photo.state || '';
-        countrySpan.textContent = photo.country || '';
-
-        // Set image count
-        imageCountSpan.textContent = (currentIndex + 1) + ' of ' + slides.length;
-
-        // Set tags
-        var tags = photo.tags || [];
-        var maxTags = 10;
-
-        if (tags.length === 0) {
-            tagsLabel.textContent = 'Tags';
-            tagsList.textContent = 'No Tags';
-        } else {
-            var sortedTags = tags.slice().sort();
-            tagsLabel.textContent = 'Tags';
-            tagsList.innerHTML = '';
-
-            var displayCount = Math.min(sortedTags.length, maxTags);
-            for (var i = 0; i < displayCount; i++) {
-                var tagDiv = document.createElement('div');
-                tagDiv.className = 'tag-item';
-                tagDiv.textContent = sortedTags[i];
-                tagsList.appendChild(tagDiv);
-            }
-
-            if (sortedTags.length > maxTags) {
-                var remainingCount = sortedTags.length - maxTags;
-                var moreTagsDiv = document.createElement('div');
-                moreTagsDiv.className = 'tag-item tag-more';
-                moreTagsDiv.textContent = 'plus ' + remainingCount + ' more tags';
-                tagsList.appendChild(moreTagsDiv);
-            }
-        }
-
-        // Preload next photo
-        preloadNextPhoto();
-    }
-
-    /**
-     * Render stat slide
-     */
-    function renderStat(statType) {
-        if (statType === 'intro') {
-            statTitle.textContent = stats.year;
-            statValue.textContent = stats.total_photos + ' Photos';
-            statDetail.textContent = 'A year in review';
-        } else if (statType === 'locations') {
-            statTitle.textContent = 'Places Explored';
-            statValue.textContent = stats.unique_cities + ' cities';
-
-            // Build detail with state and country names
-            var detailParts = [];
-
-            if (stats.states_list && stats.states_list.length > 0) {
-                var statesText = stats.states_list.join(', ');
-                detailParts.push(statesText);
-            }
-
-            if (stats.countries_list && stats.countries_list.length > 0) {
-                var countriesText = stats.countries_list.join(', ');
-                detailParts.push(countriesText);
-            }
-
-            statDetail.textContent = detailParts.join(' • ');
-        } else if (statType === 'most_photographed') {
-            statTitle.textContent = 'Most Photographed';
-            statValue.textContent = stats.most_photographed_location;
-            statDetail.textContent = 'Your favorite spot this year';
-        } else if (statType === 'top_tags') {
-            statTitle.textContent = 'Top Tags';
-            if (stats.top_tags && stats.top_tags.length > 0) {
-                statValue.textContent = stats.top_tags.slice(0, 3).join(', ');
-                if (stats.top_tags.length > 3) {
-                    statDetail.textContent = 'and ' + (stats.top_tags.length - 3) + ' more';
-                } else {
-                    statDetail.textContent = 'Your most used tags';
+    function showMonthSummarySlide(monthData) {
+        photoDisplay.style.display = 'none';
+        statDisplay.style.display = 'flex';
+        
+        statDisplay.style.opacity = '0';
+        setTimeout(function() {
+            statTitle.textContent = monthData.month_name + ' ' + selectedYear;
+            
+            var summaryHtml = '<div class="summary-stats">';
+            summaryHtml += '<div>' + monthData.countries + ' Countries</div>';
+            summaryHtml += '<div>' + monthData.states + ' States</div>';
+            summaryHtml += '<div>' + monthData.cities + ' Cities</div>';
+            summaryHtml += '<div>' + monthData.total_photos + ' Photos</div>';
+            summaryHtml += '</div>';
+            
+            // Add locations list
+            if (monthData.locations && monthData.locations.length > 0) {
+                summaryHtml += '<div class="hierarchy-list">';
+                var currentCountry = '';
+                var currentState = '';
+                
+                for (var i = 0; i < monthData.locations.length; i++) {
+                    var loc = monthData.locations[i];
+                    
+                    // New country
+                    if (loc.country !== currentCountry) {
+                        if (currentCountry !== '') {
+                            summaryHtml += '</div>'; // Close previous country group
+                        }
+                        currentCountry = loc.country;
+                        currentState = ''; // Reset state
+                        summaryHtml += '<div class="country-group">';
+                        summaryHtml += '<div class="country-name">' + loc.country + '</div>';
+                    }
+                    
+                    // New state within country
+                    if (loc.state !== currentState) {
+                        currentState = loc.state;
+                        summaryHtml += '<div class="state-name">- ' + loc.state + '</div>';
+                    }
+                    
+                    // Add city
+                    summaryHtml += '<div class="city-name">  • ' + loc.city + '</div>';
                 }
-            } else {
-                statValue.textContent = 'No tags used';
-                statDetail.textContent = '';
+                
+                if (currentCountry !== '') {
+                    summaryHtml += '</div>'; // Close last country group
+                }
+                summaryHtml += '</div>';
             }
-        } else if (statType === 'monthly') {
-            statTitle.textContent = 'Peak Activity';
-            statValue.textContent = stats.most_active_month;
-            statDetail.textContent = 'Your most photographed month';
-        }
+            
+            statValue.innerHTML = summaryHtml;
+            statDetail.textContent = '';
+            
+            statDisplay.style.opacity = '1';
+        }, 300);
     }
 
     /**
-     * Preload next photo (if next slide is a photo)
+     * Show summary slide with hierarchy (legacy - redirects to year summary)
      */
-    function preloadNextPhoto() {
-        var nextIndex = (currentIndex + 1) % slides.length;
-        var nextSlide = slides[nextIndex];
-        if (nextSlide && nextSlide.type === 'photo') {
-            var img = new Image();
-            var imagePath = 'cache/' + nextSlide.photo.cached_filename;
-            img.src = imagePath;
-        }
+    function showSummarySlide() {
+        showYearSummarySlide();
+    }
+
+    /**
+     * Show location slide with multiple photos using Justified Gallery
+     */
+    function showLocationSlide(locationData) {
+        statDisplay.style.display = 'none';
+        photoDisplay.style.display = 'flex';
+        
+        photoDisplay.style.opacity = '0';
+        setTimeout(function() {
+            var locationTitle = locationData.city + ', ' + locationData.state;
+            if (locationData.country !== 'United States') {
+                locationTitle += ', ' + locationData.country;
+            }
+            
+            var gridHtml = '<div class="location-header">';
+            gridHtml += '<h2>' + locationTitle + '</h2>';
+            var pageInfo = locationData.photo_count + ' photo' + (locationData.photo_count !== 1 ? 's' : '');
+            if (locationData.total_pages > 1) {
+                pageInfo += ' (page ' + locationData.page + ' of ' + locationData.total_pages + ')';
+            }
+            gridHtml += '<p>' + pageInfo + '</p>';
+            gridHtml += '</div>';
+            
+            gridHtml += '<div class="photo-grid" id="justified-gallery">';
+            for (var i = 0; i < locationData.photos.length; i++) {
+                var photo = locationData.photos[i];
+                var imagePath = 'cache/' + photo.cached_filename;
+                gridHtml += '<a href="' + imagePath + '">';
+                gridHtml += '<img src="' + imagePath + '" alt="' + photo.filename + '">';
+                gridHtml += '</a>';
+            }
+            gridHtml += '</div>';
+            
+            photoDisplay.innerHTML = gridHtml;
+            
+            // Initialize Justified Gallery
+            jQuery('#justified-gallery').justifiedGallery({
+                rowHeight: 300,
+                maxRowHeight: 400,
+                margins: 8,
+                border: 0,
+                lastRow: 'nojustify',
+                captions: false,
+                randomize: false,
+                waitThumbnailsLoad: false,
+                rel: 'gallery',
+                cssAnimation: true
+            });
+            
+            photoDisplay.style.opacity = '1';
+        }, 300);
     }
 
     /**

@@ -10,6 +10,9 @@ require_once __DIR__ . '/synology.php';
 
 header('Content-Type: application/json');
 
+// Increase execution time for processing many locations
+set_time_limit(300);
+
 // Get year parameter
 $year = isset($_GET['year']) ? (int)$_GET['year'] : null;
 
@@ -45,80 +48,41 @@ try {
         $config['synology']['password']
     );
 
+    logMessage('Starting year photos API request for year ' . $year, 'DEBUG');
+
     // Fetch all photos for the year
     $allPhotos = $api->getPhotosForYear($year);
 
-    if ($allPhotos === false) {
-        throw new Exception('Failed to fetch photos from Synology');
+    logMessage('Fetched ' . count($allPhotos) . ' total photos for year ' . $year, 'DEBUG');
+
+    if ($allPhotos === false || empty($allPhotos)) {
+        throw new Exception('No photos found for year ' . $year);
     }
 
-    // Calculate statistics from all photos
-    $stats = calculateYearStats($allPhotos, $year);
-
-    // Apply smart selection algorithm
-    $targetCount = $config['year_review']['photos_per_year'] ?? 52;
-    $selectedPhotos = selectYearHighlights($allPhotos, $targetCount);
-
-    // Format photos for client consumption
-    $formattedPhotos = [];
-    foreach ($selectedPhotos as $photo) {
-        // Extract metadata
-        $cacheKey = isset($photo['additional']['thumbnail']['cache_key'])
-            ? $photo['additional']['thumbnail']['cache_key']
-            : null;
-
-        if (!$cacheKey) {
-            logMessage('Skipping photo ' . $photo['id'] . ' - no thumbnail cache key', 'WARNING');
-            continue; // Skip photos without thumbnails
+    // Group photos by month first for better geographic distribution
+    $photosByMonth = [];
+    foreach ($allPhotos as $photo) {
+        $month = (int) date('n', $photo['time']);
+        if (!isset($photosByMonth[$month])) {
+            $photosByMonth[$month] = [];
         }
-
-        // Download and cache thumbnail to year_review subdirectory
-        $unitId = isset($photo['additional']['thumbnail']['unit_id']) ? $photo['additional']['thumbnail']['unit_id'] : null;
-        $cachedFilename = downloadYearReviewThumbnail($api, $photo['id'], $cacheKey, 'xl', $year, $unitId);
-
-        if (!$cachedFilename) {
-            $name = isset($photo['filename']) ? $photo['filename'] : 'unknown';
-            logMessage('Failed to download thumbnail for photo ' . $photo['id'] . ' (' . $name . ')', 'WARNING');
-            continue; // Skip photos that fail to download
-        }
-
-        logMessage("Cached filename for photo {$photo['id']}: {$cachedFilename}", 'DEBUG');
-
-        // Extract location data
-        $location = extractLocationData($photo);
-
-        // Extract tags
-        $tags = extractTags($photo);
-
-        // Use same structure as regular slideshow (cache/photos.json)
-        $formattedPhoto = [
-            'id' => $photo['id'],
-            'filename' => $photo['filename'],
-            'time' => $photo['time'],  // Unix timestamp - JavaScript will convert this
-            'year' => date('Y', $photo['time']),  // Keep for backwards compatibility
-            'cached_filename' => $cachedFilename,
-            'landmark' => $location['landmark'],
-            'route' => $location['route'],
-            'village_district_town_city' => $location['village_district_town_city'],
-            'county' => $location['county'],
-            'state' => $location['state'],
-            'country' => $location['country'],
-            'tags' => $tags
-        ];
-
-        // Debug log to verify data matching
-        logMessage("Photo {$photo['id']}: {$photo['filename']} -> {$location['village_district_town_city']}, {$location['state']}", 'DEBUG');
-
-        $formattedPhotos[] = $formattedPhoto;
+        $photosByMonth[$month][] = $photo;
     }
+
+    logMessage('Processing ' . count($photosByMonth) . ' months', 'DEBUG');
+
+    // Group by month with summaries and location slides
+    $monthsData = groupPhotosByMonth($allPhotos, $photosByMonth, $api, $year);
+
+    logMessage('Completed grouping. Generated ' . count($monthsData['months']) . ' months with location slides', 'DEBUG');
 
     $api->logout();
 
     echo json_encode([
         'success' => true,
         'year' => $year,
-        'stats' => $stats,
-        'photos' => $formattedPhotos
+        'year_summary' => $monthsData['year_summary'],
+        'months' => $monthsData['months']
     ]);
 
 } catch (Exception $e) {
@@ -128,6 +92,260 @@ try {
         'success' => false,
         'error' => 'Failed to load photos for year ' . $year
     ]);
+}
+
+/**
+ * Group photos by month with summaries and location slides
+ *
+ * @param array $allPhotos All photos from the year
+ * @param array $photosByMonth Photos grouped by month number
+ * @param SynologyAPI $api API instance for downloading thumbnails
+ * @param int $year Year for cache organization
+ * @return array Months data with year summary and month slides
+ */
+function groupPhotosByMonth($allPhotos, $photosByMonth, $api, $year)
+{
+    $monthNames = [
+        'January',
+        'February',
+        'March',
+        'April',
+        'May',
+        'June',
+        'July',
+        'August',
+        'September',
+        'October',
+        'November',
+        'December'
+    ];
+
+    // Calculate year-level summary from ALL photos
+    $yearCountries = [];
+    $yearStates = [];
+    $yearCities = [];
+
+    foreach ($allPhotos as $photo) {
+        $address = isset($photo['additional']['address']) ? $photo['additional']['address'] : null;
+        if ($address) {
+            if (!empty($address['country'])) {
+                $yearCountries[$address['country']] = true;
+            }
+            if (!empty($address['state'])) {
+                $yearStates[$address['state']] = true;
+            }
+            $cityParts = [];
+            foreach (['village', 'district', 'town', 'city'] as $key) {
+                if (!empty($address[$key])) {
+                    $cityParts[] = $address[$key];
+                }
+            }
+            if (!empty($cityParts)) {
+                $yearCities[implode(', ', $cityParts)] = true;
+            }
+        }
+    }
+
+    $yearSummary = [
+        'total_photos' => count($allPhotos),
+        'countries' => count($yearCountries),
+        'states' => count($yearStates),
+        'cities' => count($yearCities)
+    ];
+
+    // Process each month
+    $months = [];
+
+    foreach ($photosByMonth as $monthNum => $monthPhotos) {
+        logMessage('Processing month ' . $monthNames[$monthNum - 1] . ' with ' . count($monthPhotos) . ' photos', 'DEBUG');
+
+        // Calculate month summary from ALL photos in this month
+        $monthCountries = [];
+        $monthStates = [];
+        $monthCities = [];
+        $monthLocations = []; // Track unique location combinations
+
+        foreach ($monthPhotos as $photo) {
+            $address = isset($photo['additional']['address']) ? $photo['additional']['address'] : null;
+            if ($address) {
+                $country = !empty($address['country']) ? $address['country'] : 'Unknown Country';
+                $state = !empty($address['state']) ? $address['state'] : 'Unknown State';
+
+                if (!empty($address['country'])) {
+                    $monthCountries[$address['country']] = true;
+                }
+                if (!empty($address['state'])) {
+                    $monthStates[$address['state']] = true;
+                }
+
+                $cityParts = [];
+                foreach (['village', 'district', 'town', 'city'] as $key) {
+                    if (!empty($address[$key])) {
+                        $cityParts[] = $address[$key];
+                    }
+                }
+                if (!empty($cityParts)) {
+                    $city = implode(', ', $cityParts);
+                    $monthCities[$city] = true;
+
+                    // Track full location combination
+                    $locationKey = $country . '|' . $state . '|' . $city;
+                    if (!isset($monthLocations[$locationKey])) {
+                        $monthLocations[$locationKey] = [
+                            'country' => $country,
+                            'state' => $state,
+                            'city' => $city
+                        ];
+                    }
+                }
+            }
+        }
+
+        // Build locations list for display
+        $locationsList = array_values($monthLocations);
+        usort($locationsList, function ($a, $b) {
+            if ($a['country'] !== $b['country']) {
+                return strcmp($a['country'], $b['country']);
+            }
+            if ($a['state'] !== $b['state']) {
+                return strcmp($a['state'], $b['state']);
+            }
+            return strcmp($a['city'], $b['city']);
+        });
+
+        $monthSummary = [
+            'month_number' => $monthNum,
+            'month_name' => $monthNames[$monthNum - 1],
+            'total_photos' => count($monthPhotos),
+            'countries' => count($monthCountries),
+            'states' => count($monthStates),
+            'cities' => count($monthCities),
+            'locations' => $locationsList
+        ];
+
+        // Group ALL photos in this month by location
+        $locationGroups = [];
+
+        foreach ($monthPhotos as $photo) {
+            $address = isset($photo['additional']['address']) ? $photo['additional']['address'] : null;
+            $country = !empty($address['country']) ? $address['country'] : 'Unknown Country';
+            $state = !empty($address['state']) ? $address['state'] : 'Unknown State';
+
+            $cityParts = [];
+            if ($address) {
+                foreach (['village', 'district', 'town', 'city'] as $key) {
+                    if (!empty($address[$key])) {
+                        $cityParts[] = $address[$key];
+                    }
+                }
+            }
+            $city = !empty($cityParts) ? implode(', ', $cityParts) : 'Unknown City';
+
+            $key = $country . '|' . $state . '|' . $city;
+
+            if (!isset($locationGroups[$key])) {
+                $locationGroups[$key] = [
+                    'country' => $country,
+                    'state' => $state,
+                    'city' => $city,
+                    'photos' => []
+                ];
+            }
+
+            $locationGroups[$key]['photos'][] = $photo;
+        }
+
+        // Sort locations alphabetically
+        ksort($locationGroups);
+
+        logMessage('Month ' . $monthNames[$monthNum - 1] . ' has ' . count($locationGroups) . ' unique locations', 'DEBUG');
+
+        // Build location slides - select up to 9 photos per location
+        $locationSlides = [];
+
+        foreach ($locationGroups as $key => $group) {
+            logMessage('Processing location: ' . $group['city'] . ', ' . $group['state'] . ', ' . $group['country'] . ' with ' . count($group['photos']) . ' photos', 'DEBUG');
+
+            // Select up to 9 photos from this location
+            $photosToShow = selectYearHighlights($group['photos'], 9);
+            $slidePhotos = [];
+
+            foreach ($photosToShow as $photo) {
+                $cacheKey = isset($photo['additional']['thumbnail']['cache_key'])
+                    ? $photo['additional']['thumbnail']['cache_key']
+                    : null;
+
+                if (!$cacheKey) {
+                    logMessage('Skipping photo ' . $photo['id'] . ' - no thumbnail cache key', 'WARNING');
+                    continue;
+                }
+
+                $unitId = isset($photo['additional']['thumbnail']['unit_id'])
+                    ? $photo['additional']['thumbnail']['unit_id']
+                    : null;
+                $cachedFilename = downloadYearReviewThumbnail($api, $photo['id'], $cacheKey, 'xl', $year, $unitId);
+
+                if (!$cachedFilename) {
+                    $name = isset($photo['filename']) ? $photo['filename'] : 'unknown';
+                    logMessage('Failed to download thumbnail for photo ' . $photo['id'] . ' (' . $name . ')', 'WARNING');
+                    continue;
+                }
+
+                $location = extractLocationData($photo);
+                $tags = extractTags($photo);
+
+                // Determine orientation from resolution
+                $orientation = 'square';
+                if (isset($photo['additional']['resolution'])) {
+                    $width = $photo['additional']['resolution']['width'];
+                    $height = $photo['additional']['resolution']['height'];
+                    if ($width > $height * 1.1) {
+                        $orientation = 'landscape';
+                    } else if ($height > $width * 1.1) {
+                        $orientation = 'portrait';
+                    }
+                }
+
+                $slidePhotos[] = [
+                    'id' => $photo['id'],
+                    'filename' => $photo['filename'],
+                    'time' => $photo['time'],
+                    'cached_filename' => $cachedFilename,
+                    'landmark' => $location['landmark'],
+                    'route' => $location['route'],
+                    'tags' => $tags,
+                    'orientation' => $orientation
+                ];
+            }
+
+            if (!empty($slidePhotos)) {
+                // Create one slide per location with up to 9 photos
+                $locationSlides[] = [
+                    'country' => $group['country'],
+                    'state' => $group['state'],
+                    'city' => $group['city'],
+                    'photo_count' => count($slidePhotos),
+                    'photos' => $slidePhotos,
+                    'page' => 1,
+                    'total_pages' => 1
+                ];
+                logMessage('Added location slide: ' . $group['city'] . ' with ' . count($slidePhotos) . ' photos', 'DEBUG');
+            }
+        }
+
+        // Only add month if it has location slides
+        if (!empty($locationSlides)) {
+            $months[] = [
+                'summary' => $monthSummary,
+                'location_slides' => $locationSlides
+            ];
+        }
+    }
+
+    return [
+        'year_summary' => $yearSummary,
+        'months' => $months
+    ];
 }
 
 /**
@@ -142,6 +360,16 @@ try {
  */
 function downloadYearReviewThumbnail($api, $photoId, $cacheKey, $size = 'xl', $year = null, $unitId = null)
 {
+    // Always download fresh (cache busting enabled)
+    $filename = ($year ? $year . '_' : '') . $photoId . '_' . $size . '.jpg';
+    $filepath = CACHE_PATH . '/year_review/' . $filename;
+
+    // Commented out cache check to always download fresh
+    // if (file_exists($filepath)) {
+    //     logMessage("Using cached thumbnail for photo {$photoId}", 'DEBUG');
+    //     return 'year_review/' . $filename;
+    // }
+
     $url = $api->getThumbnailUrl($photoId, $cacheKey, $size, $unitId);
 
     $idNote = $unitId ? " (unit {$unitId})" : '';
