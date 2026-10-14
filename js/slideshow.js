@@ -3,10 +3,9 @@
 (function() {
     'use strict';
     
-    // Check if we have photos
-    if (!photos || photos.length === 0) {
-        return;
-    }
+    // Check if we have photos (polling still runs when empty, so a later
+    // refresh can bring photos in without a manual reload)
+    var hasPhotos = !!(photos && photos.length);
     
     // Slideshow state
     var currentIndex = 0;
@@ -42,29 +41,38 @@
     var pollTimer = null;
     
     /**
-     * Poll server for updated photos
+     * Poll server for a new photo cache; reload the page when its version changes
      */
     function pollForUpdates() {
         var xhr = new XMLHttpRequest();
-        xhr.open('GET', 'api/photos.php', true);
+        xhr.open('GET', 'api/photos.php?_=' + new Date().getTime(), true);
         xhr.onreadystatechange = function() {
             if (xhr.readyState === 4 && xhr.status === 200) {
+                var response = null;
                 try {
-                    var response = JSON.parse(xhr.responseText);
-                    if (response.success && response.photos && response.photos.length !== photos.length) {
-                        photos = response.photos;
-                        // If we have more photos and we're at the end, continue
-                        if (currentIndex >= photos.length) {
-                            currentIndex = photos.length - 1;
-                        }
-                        updatePhotoContent(photos[currentIndex]);
-                    }
+                    response = JSON.parse(xhr.responseText);
                 } catch (e) {
                     // Ignore parsing errors
+                    return;
+                }
+                if (response && response.success === true &&
+                        typeof response.version === 'string' &&
+                        response.version !== photosVersion) {
+                    window.location.reload();
                 }
             }
         };
         xhr.send();
+    }
+
+    /**
+     * Normalise a metadata value to display text (arrays are joined, non-strings become '')
+     */
+    function textOf(v) {
+        if (v && typeof v === 'object' && typeof v.join === 'function') {
+            return v.join(', ');
+        }
+        return typeof v === 'string' ? v : '';
     }
     
     /**
@@ -111,12 +119,12 @@
         
         // Set location (always show, display "Missing Location" if none available)
         var hasLocationData = (
-            (photo.landmark && photo.landmark.trim() !== '') ||
-            (photo.route && photo.route.trim() !== '') ||
-            (photo.village_district_town_city && photo.village_district_town_city.trim() !== '') ||
-            (photo.county && photo.county.trim() !== '') ||
-            (photo.state && photo.state.trim() !== '') ||
-            (photo.country && photo.country.trim() !== '')
+            textOf(photo.landmark).trim() !== '' ||
+            textOf(photo.route).trim() !== '' ||
+            textOf(photo.village_district_town_city).trim() !== '' ||
+            textOf(photo.county).trim() !== '' ||
+            textOf(photo.state).trim() !== '' ||
+            textOf(photo.country).trim() !== ''
         );
 
         if (!hasLocationData) {
@@ -126,22 +134,22 @@
         }
 
         // Set landmark
-        landmarkSpan.textContent = photo.landmark || '';
+        landmarkSpan.textContent = textOf(photo.landmark);
 
         // Set route
-        routeSpan.textContent = photo.route || '';
+        routeSpan.textContent = textOf(photo.route);
 
         // Set village/district/town/city
-        villageDistrictTownCitySpan.textContent = photo.village_district_town_city || '';
+        villageDistrictTownCitySpan.textContent = textOf(photo.village_district_town_city);
 
         // Set county
-        countySpan.textContent = photo.county || '';
+        countySpan.textContent = textOf(photo.county);
 
         // Set state
-        stateSpan.textContent = photo.state || '';
+        stateSpan.textContent = textOf(photo.state);
 
         // Set country
-        countrySpan.textContent = photo.country || '';
+        countrySpan.textContent = textOf(photo.country);
         
         // Set image count (e.g., "5 of 85")
         var currentNumber = currentIndex + 1;
@@ -310,14 +318,18 @@
      * Initialize slideshow
      */
     function init() {
+        // Start polling for updates (also on the empty "No photos" screen)
+        pollTimer = setInterval(pollForUpdates, pollInterval);
+        
+        if (!hasPhotos) {
+            return;
+        }
+        
         // Show first photo
         showPhoto(0);
         
         // Start slideshow
         startSlideshow();
-        
-        // Start polling for updates
-        pollTimer = setInterval(pollForUpdates, pollInterval);
         
         // Event listeners
         prevBtn.addEventListener('click', function() {

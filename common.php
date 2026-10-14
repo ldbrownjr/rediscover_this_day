@@ -39,7 +39,45 @@ function loadConfig() {
  */
 function saveConfig($config) {
     $json = json_encode($config, JSON_PRETTY_PRINT);
-    return file_put_contents(CONFIG_PATH, $json) !== false;
+    if ($json === false) {
+        return false;
+    }
+    return writeFileAtomic(CONFIG_PATH, $json);
+}
+
+/**
+ * Write a file atomically: write to a temp file in the same directory, then
+ * rename() it over the target so readers never see a partially written file.
+ *
+ * Permissions: $mode if given, else the existing target's permissions, else 0644.
+ */
+function writeFileAtomic(string $path, string $data, ?int $mode = null): bool {
+    $dir = dirname($path);
+    $tmpPath = $dir . '/.' . basename($path) . '.' . bin2hex(random_bytes(4)) . '.tmp';
+
+    if (@file_put_contents($tmpPath, $data) === false) {
+        @unlink($tmpPath);
+        logMessage('Atomic write failed: could not write temp file for ' . basename($path), 'ERROR');
+        return false;
+    }
+
+    if ($mode === null) {
+        $mode = file_exists($path) ? (fileperms($path) & 0777) : 0644;
+    }
+
+    if (!@chmod($tmpPath, $mode)) {
+        @unlink($tmpPath);
+        logMessage('Atomic write failed: could not set permissions for ' . basename($path), 'ERROR');
+        return false;
+    }
+
+    if (!@rename($tmpPath, $path)) {
+        @unlink($tmpPath);
+        logMessage('Atomic write failed: could not replace ' . basename($path), 'ERROR');
+        return false;
+    }
+
+    return true;
 }
 
 /**
@@ -127,7 +165,36 @@ function getCachedPhotos() {
 function saveCachedPhotos($photos) {
     $cacheFile = CACHE_PATH . '/photos.json';
     $json = json_encode($photos, JSON_PRETTY_PRINT);
-    return file_put_contents($cacheFile, $json) !== false;
+    if ($json === false) {
+        return false;
+    }
+    return writeFileAtomic($cacheFile, $json);
+}
+
+/**
+ * Get a version string for the cached photos (changes whenever photos.json changes).
+ * Returns '' if the cache file doesn't exist.
+ */
+function getCachedPhotosVersion(): string {
+    $cacheFile = CACHE_PATH . '/photos.json';
+    if (!file_exists($cacheFile)) {
+        return '';
+    }
+    $hash = @md5_file($cacheFile);
+    return $hash === false ? '' : $hash;
+}
+
+/**
+ * Get the cached image filenames referenced by photos.json.
+ */
+function getCachedPhotoFilenames(): array {
+    $filenames = [];
+    foreach (getCachedPhotos() as $photo) {
+        if (is_array($photo) && isset($photo['cached_filename']) && is_string($photo['cached_filename'])) {
+            $filenames[] = $photo['cached_filename'];
+        }
+    }
+    return $filenames;
 }
 
 /**

@@ -28,6 +28,7 @@ if ($year < $firstYear || $year > $currentYear) {
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <title><?php echo h($year); ?> - Year in Review</title>
     <link rel="stylesheet" href="css/slideshow.css?v=<?php echo filemtime('css/slideshow.css'); ?>">
+    <link rel="stylesheet" href="css/year-slideshow.css?v=<?php echo filemtime(__DIR__ . '/css/year-slideshow.css'); ?>">
 </head>
 <body>
     <div id="slideshow-container">

@@ -1,6 +1,11 @@
 <?php
 require_once 'common.php';
 
+header('Cache-Control: no-cache, must-revalidate');
+
+// Read the version before the photos: if the cache changes in between, the
+// client sees an old version and reloads once, rather than missing the update.
+$photosVersion = getCachedPhotosVersion();
 $photos = getCachedPhotos();
 $config = loadConfig();
 ?>
@@ -54,6 +59,7 @@ $config = loadConfig();
     <script>
         // Pass PHP data to JavaScript
         var photos = <?php echo json_encode($photos); ?>;
+        var photosVersion = <?php echo json_encode($photosVersion); ?>;
         var config = <?php echo json_encode($config['slideshow']); ?>;
     </script>
     <script src="js/slideshow.js?v=<?php echo filemtime('js/slideshow.js'); ?>"></script>

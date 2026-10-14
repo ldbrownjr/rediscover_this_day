@@ -153,9 +153,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         
         if ($result['success']) {
             $message = "Refresh completed! Found {$result['count']} photos.";
+            $failedYears = $result['failed_years'] ?? [];
+            if (!empty($result['partial']) && count($failedYears) > 0) {
+                $message .= ' (' . count($failedYears) . ' year(s) could not be queried)';
+            }
             $messageType = 'success';
         } else {
-            $message = "Refresh failed: {$result['error']}";
+            $message = 'Refresh failed: ' . ($result['error'] ?? 'Unknown error');
             $messageType = 'error';
         }
     }

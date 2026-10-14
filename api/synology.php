@@ -92,6 +92,7 @@ class SynologyAPI {
     
     /**
      * Logout from Synology Photos API
+     * Never throws: a failed logout is logged at WARNING and the session is dropped locally.
      */
     public function logout() {
         if (!$this->sid) {
@@ -107,11 +108,18 @@ class SynologyAPI {
             '_sid' => $this->sid
         ];
         
-        $this->makeRequest($url, $params);
+        $ok = true;
+        try {
+            $this->makeRequest($url, $params);
+        } catch (Exception $e) {
+            logMessage('Synology logout request failed', 'WARNING');
+            $ok = false;
+        }
+        
         $this->sid = null;
         $this->did = null;
         
-        return true;
+        return $ok;
     }
     
     /**
@@ -123,19 +131,24 @@ class SynologyAPI {
     
     /**
      * Search for photos by date
-     * Returns all photos taken on the specified month and day across all years
+     * Returns all photos taken on the specified month and day across all years:
+     *   ['photos' => array, 'failed_years' => int[], 'years_queried' => int]
+     * Throws Exception if login fails. A failure for an individual year is
+     * recorded in failed_years and the search continues.
      */
     public function searchPhotosByDate($month, $day, $firstYear = null) {
         logMessage("searchPhotosByDate called with month={$month}, day={$day}, firstYear={$firstYear}", 'INFO');
         
         if (!$this->sid && !$this->login()) {
             logMessage('Failed to login to Synology API in searchPhotosByDate', 'ERROR');
-            return [];
+            throw new Exception('Synology login failed');
         }
         
         logMessage("Logged in successfully, SID: " . substr($this->sid, 0, 10) . "...", 'INFO');
         
         $allPhotos = [];
+        $failedYears = [];
+        $yearsQueried = 0;
         
         // We need to search year by year since the API doesn't support "any year"
         $currentYear = (int)date('Y');
@@ -145,6 +158,7 @@ class SynologyAPI {
         
         for ($year = $startYear; $year <= $currentYear; $year++) {
             logMessage("Querying year {$year} for date {$month}/{$day}...", 'INFO');
+            $yearsQueried++;
             try {
                 $photos = $this->getPhotosForSpecificDate($year, $month, $day);
                 
@@ -157,6 +171,7 @@ class SynologyAPI {
                 }
             } catch (Exception $e) {
                 logMessage("Error querying photos for {$month}/{$day}/{$year}: " . $e->getMessage(), 'ERROR');
+                $failedYears[] = $year;
                 // Continue to next year
             }
         }
@@ -171,7 +186,11 @@ class SynologyAPI {
         
         logMessage("Photos sorted by capture date (oldest to newest)", 'INFO');
         
-        return $allPhotos;
+        return [
+            'photos' => $allPhotos,
+            'failed_years' => $failedYears,
+            'years_queried' => $yearsQueried
+        ];
     }
     
     /**
@@ -235,8 +254,8 @@ class SynologyAPI {
                 throw new Exception('Photo query failed due to multiple errors.');
             } else {
                 logMessage('Photo query failed: Unknown error (code: ' . ($errorCode ?? 'N/A') . ')', 'ERROR');
+                throw new Exception('Photo query failed with an unknown error.');
             }
-            return [];
         }
     }
 
@@ -362,7 +381,7 @@ class SynologyAPI {
             $filename = $photoId . '_' . $size . '.jpg';
             $filepath = CACHE_PATH . '/' . $filename;
             
-            if (file_put_contents($filepath, $imageData)) {
+            if (writeFileAtomic($filepath, $imageData, 0644)) {
                 return $filename;
             }
         }

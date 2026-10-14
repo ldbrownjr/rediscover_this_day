@@ -1,5 +1,5 @@
 <?php
-require_once '../common.php';
+require_once __DIR__ . '/../common.php';
 
 header('Content-Type: application/json');
 header('Cache-Control: no-cache, must-revalidate');
@@ -10,12 +10,13 @@ try {
         'success' => true,
         'photos' => $photos,
         'count' => count($photos),
+        'version' => getCachedPhotosVersion(),
         'timestamp' => time()
     ]);
 } catch (Exception $e) {
+    logMessage('photos.php error: ' . $e->getMessage(), 'ERROR');
     echo json_encode([
         'success' => false,
-        'error' => $e->getMessage()
+        'error' => 'Unable to load photos'
     ]);
 }
-?>

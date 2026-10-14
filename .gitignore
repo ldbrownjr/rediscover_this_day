@@ -23,3 +23,10 @@ Thumbs.db
 *.swp
 *.swo
 *~
+
+# Claude Code local-only files
+CLAUDE.local.md
+.claude/settings.local.json
+
+# Atomic-write temp files
+*.tmp
