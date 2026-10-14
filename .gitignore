@@ -2,6 +2,9 @@
 config/config.json
 config/config.php
 config/*.backup*
+# Shared Synology session (Year in Review thumbnails) - live credential
+config/synology_session.php
+config/.synology_session.lock
 
 # Cache files
 cache/photos.json

@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/../common.php';
+session_write_close();
 
 header('Content-Type: application/json');
 header('Cache-Control: no-cache, must-revalidate');

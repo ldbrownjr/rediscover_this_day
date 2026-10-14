@@ -2,6 +2,8 @@
 *.jpg
 *.jpeg
 *.png
+# Per-year slide lists (guarded)
+*.cache.php
 
 # But keep the directory structure
 !.gitignore

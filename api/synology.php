@@ -268,7 +268,7 @@ class SynologyAPI {
     public function getPhotosForYear($year) {
         if (!$this->sid && !$this->login()) {
             logMessage('Failed to login for year query', 'ERROR');
-            return [];
+            throw new Exception('Synology login failed');
         }
 
         // Create timestamps for Jan 1 00:00:00 to Dec 31 23:59:59
@@ -286,7 +286,7 @@ class SynologyAPI {
 
             if ($batch === false) {
                 logMessage("Failed to fetch batch at offset {$offset}", 'ERROR');
-                break;
+                throw new Exception('Year query failed');
             }
 
             $allPhotos = array_merge($allPhotos, $batch);
@@ -367,6 +367,54 @@ class SynologyAPI {
         ]);
     }
     
+    /**
+     * Current Synology session id (null when logged out). Never log it.
+     */
+    public function getSid(): ?string {
+        return $this->sid;
+    }
+
+    /**
+     * Use an existing Synology session id instead of logging in.
+     */
+    public function setSid(string $sid): void {
+        $this->sid = $sid;
+    }
+
+    /**
+     * Fetch a thumbnail and return its JPEG bytes.
+     *
+     * Throws Exception if the request fails (code 0) or Synology answers with
+     * something other than a JPEG (code = Synology error code, e.g. 106/107/119
+     * for an expired or replaced session).
+     */
+    public function fetchThumbnail($photoId, $cacheKey, $size = 'xl', $unitId = null): string {
+        $url = $this->getThumbnailUrl($photoId, $cacheKey, $size, $unitId);
+
+        try {
+            $client = new \GuzzleHttp\Client([
+                'timeout' => 20,
+                'connect_timeout' => 5,
+                'verify' => false,
+                'allow_redirects' => true,
+                // Synology answers e.g. an expired sid with HTTP 404 + a JSON error
+                // body: read the body instead of throwing, so the code is visible
+                'http_errors' => false,
+            ]);
+            $body = $client->get($url)->getBody()->getContents();
+        } catch (\Exception $e) {
+            throw new Exception('Thumbnail request failed: ' . redactSecrets($e->getMessage()), 0);
+        }
+
+        if (strncmp($body, "\xFF\xD8", 2) === 0) {
+            return $body;
+        }
+
+        $decoded = json_decode($body, true);
+        $code = is_array($decoded) ? ($decoded['error']['code'] ?? 0) : 0;
+        throw new Exception('Thumbnail fetch failed', (int)$code);
+    }
+
     /**
      * Download photo thumbnail to local cache
      */

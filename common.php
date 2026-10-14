@@ -381,6 +381,14 @@ function redactSecrets(string $s): string {
 }
 
 /**
+ * Whether the Year in Review feature is turned on (year_review.enable_feature,
+ * default true). Every enable check goes through this.
+ */
+function isYearReviewEnabled(?array $config): bool {
+    return (bool)($config['year_review']['enable_feature'] ?? true);
+}
+
+/**
  * Check if user is logged in as admin
  */
 function isAdminLoggedIn() {
