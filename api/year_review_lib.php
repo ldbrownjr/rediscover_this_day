@@ -16,7 +16,7 @@
  * "thumbs" lists ONLY the photos selected into slides; it is the allow-list
  * for api/year_thumb.php. The year cover and the month photos are always picked
  * from those photos. The cover is shown at size xl, month photos (and picker
- * tiles) at size m; location grids at xl. Older-schema files are rebuilt
+ * tiles) at size m; location grids at m. Older-schema files are rebuilt
  * (schema 3: w/h are additional.resolution as-is, which Synology already
  * reports display-oriented; schema 2 wrongly swapped them for EXIF 5-8).
  *
@@ -603,8 +603,11 @@ function buildYearData(SynologyAPI $api, int $year): array {
 
 /**
  * Add "src" to every photo: the static cached file when it exists, else the
- * on-demand endpoint. Decided per response, never stored. The year cover and
- * location photos use size xl, the month summary photos size m.
+ * on-demand endpoint. Decided per response, never stored. The year cover uses
+ * size xl; month summary photos and location grid photos size m. Synology's
+ * m is 320px on the short edge, which already exceeds a ~165px grid tile on
+ * the iPad's non-Retina screen (panoramas included), at a fraction of xl's
+ * decoded memory (xl grids crashed the iPad 2).
  */
 function withYearPhotoSrc(array $data, int $year): array {
     if (is_array($data['year_summary']['cover'] ?? null)) {
@@ -622,7 +625,7 @@ function withYearPhotoSrc(array $data, int $year): array {
         foreach (($month['location_slides'] ?? []) as $s => $slide) {
             foreach (($slide['photos'] ?? []) as $p => $photo) {
                 $id = (int)($photo['id'] ?? 0);
-                $data['months'][$m]['location_slides'][$s]['photos'][$p]['src'] = yearThumbSrc($year, $id, 'xl');
+                $data['months'][$m]['location_slides'][$s]['photos'][$p]['src'] = yearThumbSrc($year, $id, 'm');
             }
         }
     }
