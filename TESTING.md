@@ -170,7 +170,8 @@ Use this checklist to verify the application is working correctly.
 ### Endpoints (local `php -S`)
 
 - [ ] `api/year_photos.php?year=Y`: first call builds the list (seconds), the next is cached (`"cached": true`, well under 0.5s)
-- [ ] `api/year_thumb.php`: a miss returns a JPEG and creates `cache/year_review/{Y}_{id}_xl.jpg`; the next list call returns that file as a direct `src`
+- [ ] `api/year_thumb.php`: a miss returns a JPEG and creates `cache/year_review/{Y}_{id}_{xl|m}.jpg`; the next list call returns that file as a direct `src`; location grid photos are all size m, the year cover xl
+- [ ] iPad 2: step through every location slide of a big year (e.g. 2023) without the app dropping back to the Home Screen
 - [ ] The list response has `year_summary.cover` `{id, w, h, src}` (src at size xl) and `months[].summary.photos` (up to 3, src at size m with `&size=m` or `_m.jpg`); an older-schema (1 or 2) list file is rebuilt on first open; portrait photos keep portrait `w`/`h` (compare with the real m thumbnail)
 - [ ] `size=m` for an allow-listed id returns 200 image/jpeg and creates `{Y}_{id}_m.jpg`; `size=xx`, `size=M` and `size[]=m` return 404; no `size` still serves xl
 - [ ] Bad input (`id=../x`, `id=1e3`, empty id, `id[]=1`, unknown id, years out of range) returns an empty 404 with no file written and no Synology call
