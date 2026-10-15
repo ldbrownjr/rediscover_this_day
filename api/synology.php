@@ -322,7 +322,9 @@ class SynologyAPI {
     private function getPhotosForTimeRange($startTimestamp, $endTimestamp, $offset = 0, $limit = 5000) {
         $url = $this->baseUrl . '/photo/webapi/entry.cgi';
 
-        $additionals = ['thumbnail', 'address', 'resolution', 'orientation', 'tag'];
+        // 'gps' ({latitude, longitude}, absent when unknown) is for Year in Review's
+        // place grouping only: it is never stored, logged or sent to the browser
+        $additionals = ['thumbnail', 'address', 'resolution', 'orientation', 'tag', 'gps'];
         $additional = str_replace("'", '"', str_replace(' ', '', json_encode($additionals)));
 
         $params = [

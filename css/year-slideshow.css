@@ -321,6 +321,16 @@ body {
     line-height: 18px;
     white-space: nowrap;
     overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* A place name too long for the sub-line: clipped so its "+N" stays visible */
+.place-names-clip {
+    display: inline-block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    vertical-align: top;
 }
 
 .location-sub .rule {
@@ -332,12 +342,30 @@ body {
     background: #e0a548;
 }
 
-/* Takes the remaining height of #photo-display (no max-height) */
+/* Takes the remaining height of #photo-display (no max-height). JS sets an
+   inline width in px (the best-fitting layout); #photo-display centres it.
+   No padding: jG positions tiles from the padding edge, so padding only left
+   an uneven right/bottom gap. */
 .photo-grid {
     width: 100%;
     max-width: 1800px;
-    padding: 5px;
+    padding: 0;
     overflow-y: auto;
+}
+
+/* A one-photo slide: the photo contained in the grid area, centred (JS sets
+   the height and the img's size and top margin) */
+.photo-single {
+    width: 100%;
+    text-align: center;
+    -webkit-flex-shrink: 0;
+    flex-shrink: 0;
+}
+
+.photo-single img {
+    display: inline-block;
+    border-radius: 3px;
+    vertical-align: top;
 }
 
 .photo-grid > div {
@@ -353,7 +381,8 @@ body {
 }
 
 /* A thumbnail that failed to load: blank tile, layout unchanged */
-.photo-grid > div.thumb-missing {
+.photo-grid > div.thumb-missing,
+.photo-single.thumb-missing {
     background: #161618;
 }
 

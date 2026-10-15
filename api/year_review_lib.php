@@ -8,17 +8,22 @@
  * and returns an empty response.
  *
  * Per-year file cache/year_review/{year}.cache.php (guarded JSON):
- *   { "schema": 3, "year": 2019, "generated_at": <unix>,
+ *   { "schema": 4, "year": 2019, "generated_at": <unix>,
  *     "data":   { "year_summary": { ..., "cover": {id, w, h} | null },
  *                 "months": [ { "summary": { ..., "photos": [ {id, w, h}, ... up to 3 ] },
- *                               "location_slides": [...] } ] },
+ *                               "location_slides": [ {title, photo_count, places?,
+ *                                                     photos: [{id, filename, w?, h?}]} ] } ] },
  *     "thumbs": { "<id>": { "k": "<cache_key>", "u": <unit_id|null> } } }
  * "thumbs" lists ONLY the photos selected into slides; it is the allow-list
  * for api/year_thumb.php. The year cover and the month photos are always picked
  * from those photos. The cover is shown at size xl, month photos (and picker
- * tiles) at size m; location grids at m. Older-schema files are rebuilt
- * (schema 3: w/h are additional.resolution as-is, which Synology already
- * reports display-oriented; schema 2 wrongly swapped them for EXIF 5-8).
+ * tiles) at size m; location grid photos at m, or xl for tiles drawn larger
+ * than m (see withYearPhotoSrc()). Older-schema files are rebuilt.
+ * Schema 4: nearby places share a location slide (GPS clustering, see
+ * clusterLocationGroups()); a merged slide lists its member places in
+ * "places" (city names only). GPS is used while building and never stored.
+ * Schema 3: w/h are additional.resolution as-is, which Synology already
+ * reports display-oriented (schema 2 wrongly swapped them for EXIF 5-8).
  *
  * Shared Synology session config/synology_session.php (guarded JSON):
  *   { "sid": "...", "created": <unix> }
@@ -29,11 +34,20 @@
 require_once __DIR__ . '/../common.php';
 require_once __DIR__ . '/synology.php';
 
-define('YEAR_CACHE_SCHEMA', 3);
+define('YEAR_CACHE_SCHEMA', 4);
 define('YEAR_THUMB_SIZE', 'xl'); // default size
 define('YEAR_THUMB_SIZES', ['xl', 'm']); // every size that may be cached and served
 define('YEAR_REVIEW_DIR', CACHE_PATH . '/year_review');
 define('YEAR_PHOTOS_PER_SLIDE', 9);
+// Place grouping (clusterLocationGroups()): places within this many km of a
+// cluster's anchor share a slide; clusters of at most YEAR_THIN_MAX_PHOTOS
+// photos join a larger one within YEAR_THIN_RADIUS_KM
+define('YEAR_CLUSTER_RADIUS_KM', 20);
+define('YEAR_THIN_RADIUS_KM', 40);
+define('YEAR_THIN_MAX_PHOTOS', 2);
+// Lower-case city-name components that are land-use values, not place names
+// (skipped in a merged slide's "places")
+define('YEAR_GENERIC_PLACE_NAMES', ['terreno urbano', 'zona urbana', 'área urbana', 'area urbana', 'unnamed road']);
 define('SYNOLOGY_SESSION_PATH', BASE_PATH . '/config/synology_session.php');
 define('SYNOLOGY_SESSION_LOCK', BASE_PATH . '/config/.synology_session.lock');
 // Synology's thumbnail API answers an expired/invalid sid with a plain HTML 404,
@@ -416,6 +430,399 @@ function publicPhotoRef(array $photo): array {
 }
 
 /**
+ * [latitude, longitude] from additional.gps, or null when it is missing, not
+ * numeric, out of range or exactly 0,0. GPS is only used while building the
+ * slides: never store, log or send it.
+ */
+function photoGps(array $photo): ?array {
+    $gps = $photo['additional']['gps'] ?? null;
+    if (!is_array($gps) || !isset($gps['latitude'], $gps['longitude'])
+        || !is_numeric($gps['latitude']) || !is_numeric($gps['longitude'])) {
+        return null;
+    }
+    $lat = (float)$gps['latitude'];
+    $lon = (float)$gps['longitude'];
+    if (abs($lat) > 90 || abs($lon) > 180 || (abs($lat) < 1e-9 && abs($lon) < 1e-9)) {
+        return null;
+    }
+    return [$lat, $lon];
+}
+
+/**
+ * Great-circle distance in km (haversine, earth radius 6371 km).
+ */
+function haversineKm(float $lat1, float $lon1, float $lat2, float $lon2): float {
+    $rad = M_PI / 180;
+    $a = sin(($lat2 - $lat1) * $rad / 2) ** 2
+        + cos($lat1 * $rad) * cos($lat2 * $rad) * sin(($lon2 - $lon1) * $rad / 2) ** 2;
+    return 2 * 6371 * asin(min(1.0, sqrt($a)));
+}
+
+/**
+ * Median of a non-empty list of numbers.
+ */
+function medianOf(array $values): float {
+    sort($values);
+    $n = count($values);
+    $mid = intdiv($n, 2);
+    return $n % 2 ? (float)$values[$mid] : ($values[$mid - 1] + $values[$mid]) / 2;
+}
+
+/**
+ * Index of the cluster nearest to (lat, lon) within $maxKm, or null. Only
+ * clusters of $country when it is not null; $only limits the candidates to
+ * those indexes. Ties go to the earlier-created cluster.
+ */
+function nearestCluster(array $clusters, float $lat, float $lon, ?string $country, float $maxKm, ?array $only = null): ?int {
+    $best = null;
+    $bestDist = null;
+    foreach ($only ?? array_keys($clusters) as $ci) {
+        $cluster = $clusters[$ci];
+        if ($country !== null && $cluster['country'] !== $country) {
+            continue;
+        }
+        $dist = haversineKm($lat, $lon, $cluster['lat'], $cluster['lon']);
+        if ($dist <= $maxKm && ($bestDist === null || $dist < $bestDist)) {
+            $best = $ci;
+            $bestDist = $dist;
+        }
+    }
+    return $best;
+}
+
+/**
+ * Group one month's place groups into slides by GPS ("anchored leader
+ * clustering"):
+ *  1. Anchors are city places with at least one GPS photo; their point is the
+ *     median latitude/longitude of those photos. Largest first, each joins the
+ *     nearest cluster of the same country whose anchor point is within
+ *     YEAR_CLUSTER_RADIUS_KM, else starts one at its own point. A city place
+ *     moves as a whole (its photos without GPS too). Points never move, so a
+ *     cluster is at most 2R across and can't chain along a coast.
+ *  2. Photos of city-less places (state/country only) and address-less photos
+ *     with GPS are assigned one by one, in time order, to the nearest cluster
+ *     within R (same country if the photo has one). Unassigned photos stay in
+ *     their own place group ("Texas", "Unknown location").
+ *  3. A cluster with <= YEAR_THIN_MAX_PHOTOS photos joins the nearest larger
+ *     cluster of the same country within YEAR_THIN_RADIUS_KM (one pass).
+ * $groups: json_encode(parts) => ['parts' => [...], 'photos' => [...]] (no
+ * unknown group); $unknown: the photos with no address.
+ * Returns the slides in display order (country, state, city of the anchor or
+ * the group; "Unknown location" last), each
+ * ['parts' => [...], 'anchor' => key|null, 'members' => [key => photos]].
+ * The key of the address-less photos is '__unknown__'.
+ */
+function clusterLocationGroups(array $groups, array $unknown): array {
+    // 1. Anchors
+    $anchors = [];
+    foreach ($groups as $key => $group) {
+        if (!isset($group['parts']['city'])) {
+            continue;
+        }
+        $lats = [];
+        $lons = [];
+        foreach ($group['photos'] as $photo) {
+            $gps = photoGps($photo);
+            if ($gps !== null) {
+                $lats[] = $gps[0];
+                $lons[] = $gps[1];
+            }
+        }
+        if (!empty($lats)) {
+            $anchors[] = ['key' => (string)$key, 'lat' => medianOf($lats), 'lon' => medianOf($lons)];
+        }
+    }
+    usort($anchors, function ($a, $b) use ($groups) {
+        $cmp = count($groups[$b['key']]['photos']) - count($groups[$a['key']]['photos']);
+        if ($cmp !== 0) {
+            return $cmp;
+        }
+        $cmp = compareLocationParts($groups[$a['key']]['parts'], $groups[$b['key']]['parts']);
+        return $cmp !== 0 ? $cmp : strcmp($a['key'], $b['key']);
+    });
+
+    $clusters = [];
+    $anchored = [];
+    foreach ($anchors as $anchor) {
+        $key = $anchor['key'];
+        $parts = $groups[$key]['parts'];
+        $country = $parts['country'] ?? '';
+        $anchored[$key] = true;
+        $ci = nearestCluster($clusters, $anchor['lat'], $anchor['lon'], $country, YEAR_CLUSTER_RADIUS_KM);
+        if ($ci === null) {
+            $clusters[] = [
+                'lat' => $anchor['lat'],
+                'lon' => $anchor['lon'],
+                'country' => $country,
+                'anchor' => $key,
+                'parts' => $parts,
+                'members' => [$key => $groups[$key]['photos']]
+            ];
+        } else {
+            $clusters[$ci]['members'][$key] = $groups[$key]['photos'];
+        }
+    }
+
+    // 2. Diffuse photos; whatever isn't assigned stays in its own group
+    $leftover = [];
+    $diffuse = [];
+    foreach ($groups as $key => $group) {
+        $key = (string)$key;
+        if (isset($anchored[$key])) {
+            continue;
+        }
+        if (isset($group['parts']['city'])) {
+            // A city place without any GPS photo stays its own slide
+            $leftover[$key] = $group['photos'];
+            continue;
+        }
+        foreach ($group['photos'] as $photo) {
+            $diffuse[] = ['key' => $key, 'country' => $group['parts']['country'] ?? null, 'photo' => $photo];
+        }
+    }
+    foreach ($unknown as $photo) {
+        $diffuse[] = ['key' => '__unknown__', 'country' => null, 'photo' => $photo];
+    }
+    usort($diffuse, function ($a, $b) {
+        $cmp = (int)$a['photo']['time'] <=> (int)$b['photo']['time'];
+        return $cmp !== 0 ? $cmp : (int)$a['photo']['id'] <=> (int)$b['photo']['id'];
+    });
+    foreach ($diffuse as $item) {
+        $gps = photoGps($item['photo']);
+        $ci = $gps === null ? null
+            : nearestCluster($clusters, $gps[0], $gps[1], $item['country'], YEAR_CLUSTER_RADIUS_KM);
+        if ($ci === null) {
+            $leftover[$item['key']][] = $item['photo'];
+        } else {
+            $clusters[$ci]['members'][$item['key']][] = $item['photo'];
+        }
+    }
+
+    // 3. Thin fold (one pass: sizes as they were before it)
+    $sizes = [];
+    $thick = [];
+    foreach ($clusters as $ci => $cluster) {
+        $sizes[$ci] = 0;
+        foreach ($cluster['members'] as $photos) {
+            $sizes[$ci] += count($photos);
+        }
+        if ($sizes[$ci] > YEAR_THIN_MAX_PHOTOS) {
+            $thick[] = $ci;
+        }
+    }
+    foreach ($clusters as $ci => $cluster) {
+        if ($sizes[$ci] > YEAR_THIN_MAX_PHOTOS) {
+            continue;
+        }
+        $ti = nearestCluster($clusters, $cluster['lat'], $cluster['lon'], $cluster['country'], YEAR_THIN_RADIUS_KM, $thick);
+        if ($ti === null) {
+            continue;
+        }
+        foreach ($cluster['members'] as $key => $photos) {
+            $clusters[$ti]['members'][$key] = array_merge($clusters[$ti]['members'][$key] ?? [], $photos);
+        }
+        unset($clusters[$ci]);
+    }
+
+    // Slides: clusters and leftover groups by place, "Unknown location" last
+    $slides = [];
+    foreach ($clusters as $cluster) {
+        $slides[] = ['parts' => $cluster['parts'], 'anchor' => $cluster['anchor'], 'members' => $cluster['members']];
+    }
+    $unknownLeft = null;
+    foreach ($leftover as $key => $photos) {
+        $key = (string)$key;
+        if ($key === '__unknown__') {
+            $unknownLeft = ['parts' => [], 'anchor' => null, 'members' => [$key => $photos]];
+            continue;
+        }
+        $slides[] = ['parts' => $groups[$key]['parts'], 'anchor' => null, 'members' => [$key => $photos]];
+    }
+    usort($slides, function ($a, $b) {
+        return compareLocationParts($a['parts'], $b['parts']);
+    });
+    if ($unknownLeft !== null) {
+        $slides[] = $unknownLeft;
+    }
+    return $slides;
+}
+
+/**
+ * Location parts of a member key ('__unknown__' has none).
+ */
+function memberParts(string $key, array $groups): array {
+    return $key === '__unknown__' ? [] : ($groups[$key]['parts'] ?? []);
+}
+
+/**
+ * The broadest name of a city part: its last ", " component
+ * ("Belltown, Seattle" -> "Seattle").
+ */
+function broadCityName(string $city): string {
+    $names = explode(', ', $city);
+    return (string)end($names);
+}
+
+/**
+ * Title of a slide from clusterLocationGroups(). One member: the place title,
+ * as before. Several: "<name> area" plus the anchor's state and country, where
+ * <name> is the broadest city name with the most photos among the members that
+ * have a city (ties: the anchor's name, else alphabetical).
+ */
+function clusterTitle(array $slide, array $groups): string {
+    if (count($slide['members']) === 1 || $slide['anchor'] === null) {
+        $key = (string)array_key_first($slide['members']);
+        return buildLocationTitle(memberParts($key, $groups));
+    }
+    $tally = [];
+    foreach ($slide['members'] as $key => $photos) {
+        $parts = memberParts((string)$key, $groups);
+        if (isset($parts['city'])) {
+            $name = broadCityName($parts['city']);
+            $tally[$name] = ($tally[$name] ?? 0) + count($photos);
+        }
+    }
+    $anchorParts = $groups[$slide['anchor']]['parts'];
+    $anchorName = broadCityName($anchorParts['city']);
+    $best = null;
+    foreach ($tally as $name => $n) {
+        $name = (string)$name;
+        if ($best === null || $n > $tally[$best]
+            || ($n === $tally[$best] && $best !== $anchorName
+                && ($name === $anchorName || strcmp($name, $best) < 0))) {
+            $best = $name;
+        }
+    }
+    $parts = ['city' => $best . ' area'];
+    foreach (['state', 'country'] as $k) {
+        if (isset($anchorParts[$k])) {
+            $parts[$k] = $anchorParts[$k];
+        }
+    }
+    return buildLocationTitle($parts);
+}
+
+/**
+ * The most specific name of a city part: its first ", " component that is not
+ * a generic Synology land-use value ("Terreno urbano, San Miguel de Cozumel"
+ * -> "San Miguel de Cozumel"). Null if every component is generic.
+ */
+function specificCityName(string $city): ?string {
+    foreach (explode(', ', $city) as $name) {
+        if ($name !== '' && !in_array(mb_strtolower($name, 'UTF-8'), YEAR_GENERIC_PLACE_NAMES, true)) {
+            return $name;
+        }
+    }
+    return null;
+}
+
+/**
+ * The member places of a merged slide for its header, most photos first
+ * (ties alphabetical): the most specific name of each member's city (see
+ * specificCityName()), each name once. Members without a city (state/country
+ * only, or no address) are not listed. Pass only the members with photos
+ * shown. Empty when there are fewer than two names. Never includes GPS.
+ */
+function clusterPlaceNames(array $slide, array $groups): array {
+    if (count($slide['members']) < 2) {
+        return [];
+    }
+    $tally = [];
+    foreach ($slide['members'] as $key => $photos) {
+        $parts = memberParts((string)$key, $groups);
+        $name = isset($parts['city']) ? specificCityName($parts['city']) : null;
+        if ($name !== null) {
+            $tally[$name] = ($tally[$name] ?? 0) + count($photos);
+        }
+    }
+    if (count($tally) < 2) {
+        return [];
+    }
+    $names = array_map('strval', array_keys($tally));
+    usort($names, function ($a, $b) use ($tally) {
+        $cmp = $tally[$b] - $tally[$a];
+        return $cmp !== 0 ? $cmp : strcmp($a, $b);
+    });
+    return $names;
+}
+
+/**
+ * Up to $max photos for a slide, spread across its member places and through
+ * time. Photos with no thumbnail cache key are dropped first ($dropped counts
+ * them). Every member gets a slot (largest first) while slots last, the rest
+ * go by D'Hondt on the member sizes, and each member's photos are picked
+ * evenly through time (selectYearHighlights()). Returns the photos sorted by
+ * time, then id. $shownKeys is set to the member keys with a photo selected.
+ */
+function selectClusterPhotos(array $members, int $max = YEAR_PHOTOS_PER_SLIDE, ?int &$dropped = null, ?array &$shownKeys = null): array {
+    $dropped = 0;
+    $shownKeys = [];
+    $byTime = function ($a, $b) {
+        $cmp = (int)$a['time'] <=> (int)$b['time'];
+        return $cmp !== 0 ? $cmp : (int)$a['id'] <=> (int)$b['id'];
+    };
+
+    $list = [];
+    foreach ($members as $key => $photos) {
+        $kept = [];
+        foreach ($photos as $photo) {
+            $cacheKey = $photo['additional']['thumbnail']['cache_key'] ?? null;
+            if (!is_string($cacheKey) || $cacheKey === '') {
+                $dropped++;
+                continue;
+            }
+            $kept[] = $photo;
+        }
+        if (!empty($kept)) {
+            usort($kept, $byTime);
+            $list[] = ['key' => (string)$key, 'photos' => $kept, 'slots' => 0];
+        }
+    }
+    usort($list, function ($a, $b) {
+        $cmp = count($b['photos']) - count($a['photos']);
+        return $cmp !== 0 ? $cmp : strcmp($a['key'], $b['key']);
+    });
+
+    $total = 0;
+    foreach ($list as $member) {
+        $total += count($member['photos']);
+    }
+    $slots = min($max, $total);
+    $n = count($list);
+    for ($i = 0; $i < $n && $i < $slots; $i++) {
+        $list[$i]['slots'] = 1;
+    }
+    for ($left = $slots - min($slots, $n); $left > 0; $left--) {
+        $best = -1;
+        $bestValue = -1.0;
+        foreach ($list as $i => $member) {
+            $count = count($member['photos']);
+            if ($member['slots'] >= $count) {
+                continue;
+            }
+            $value = $count / ($member['slots'] + 1);
+            if ($value > $bestValue) {
+                $best = $i;
+                $bestValue = $value;
+            }
+        }
+        $list[$best]['slots']++;
+    }
+
+    $selected = [];
+    foreach ($list as $member) {
+        if ($member['slots'] > 0) {
+            $shownKeys[] = $member['key'];
+            foreach (selectYearHighlights($member['photos'], $member['slots']) as $photo) {
+                $selected[] = $photo;
+            }
+        }
+    }
+    usort($selected, $byTime);
+    return $selected;
+}
+
+/**
  * Query a year's photos and group them into slides (no thumbnail downloads).
  * Returns ['data' => ['year_summary' => [...], 'months' => [...]],
  *          'thumbs' => [id => ['k' => cache_key, 'u' => unit_id|null]]].
@@ -463,8 +870,10 @@ function buildYearData(SynologyAPI $api, int $year): array {
 
     $months = [];
     $thumbs = [];
-    // In memory only: per month, its groups' sizes and selected photos (with times)
+    // In memory only: per month, its slides' sizes and selected photos (with times)
     $monthGroupInfos = [];
+    $placeGroupCount = 0;
+    $slideCount = 0;
 
     foreach ($photosByMonth as $monthNum => $monthPhotos) {
         $monthCountries = [];
@@ -512,26 +921,26 @@ function buildYearData(SynologyAPI $api, int $year): array {
             $locations[] = $loc;
         }
 
-        // "Unknown location" goes last
-        if (!empty($unknown)) {
-            $groups['__unknown__'] = ['parts' => [], 'photos' => $unknown];
-        }
+        // Nearby places share a slide (by GPS); the counts and the place list
+        // above stay per place
+        $slideGroups = clusterLocationGroups($groups, $unknown);
+        $placeGroupCount += count($groups) + (empty($unknown) ? 0 : 1);
 
         $locationSlides = [];
         $groupInfos = [];
-        foreach ($groups as $group) {
+        $droppedInMonth = 0;
+        foreach ($slideGroups as $slideGroup) {
+            $sourceCount = 0;
+            foreach ($slideGroup['members'] as $memberPhotos) {
+                $sourceCount += count($memberPhotos);
+            }
             $slidePhotos = [];
             $selected = [];
-            foreach (selectYearHighlights($group['photos'], YEAR_PHOTOS_PER_SLIDE) as $photo) {
-                $cacheKey = $photo['additional']['thumbnail']['cache_key'] ?? null;
-                if (!is_string($cacheKey) || $cacheKey === '') {
-                    logMessage('Year in Review: skipping photo ' . (int)$photo['id'] . ' (no thumbnail cache key)', 'WARNING');
-                    continue;
-                }
+            foreach (selectClusterPhotos($slideGroup['members'], YEAR_PHOTOS_PER_SLIDE, $dropped, $shownKeys) as $photo) {
                 $id = (int)$photo['id'];
                 $unitId = $photo['additional']['thumbnail']['unit_id'] ?? null;
                 $thumbs[(string)$id] = [
-                    'k' => $cacheKey,
+                    'k' => $photo['additional']['thumbnail']['cache_key'],
                     'u' => is_numeric($unitId) ? (int)$unitId : null
                 ];
 
@@ -543,21 +952,37 @@ function buildYearData(SynologyAPI $api, int $year): array {
                 $slidePhotos[] = $entry + $size;
                 $selected[] = ['id' => $id, 'time' => (int)$photo['time']] + $size;
             }
+            $droppedInMonth += $dropped;
 
             if (!empty($slidePhotos)) {
-                $locationSlides[] = [
-                    'title' => buildLocationTitle($group['parts']),
-                    'photo_count' => count($slidePhotos),
+                // Title and places from the member places with photos shown
+                $shownGroup = $slideGroup;
+                $shownGroup['members'] = [];
+                foreach ($shownKeys as $key) {
+                    $shownGroup['members'][$key] = $slideGroup['members'][$key];
+                }
+                $slide = [
+                    'title' => clusterTitle($shownGroup, $groups),
+                    'photo_count' => $sourceCount, // photos taken there, not just the ones shown
                     'photos' => $slidePhotos
                 ];
+                $places = clusterPlaceNames($shownGroup, $groups);
+                if (!empty($places)) {
+                    $slide['places'] = $places;
+                }
+                $locationSlides[] = $slide;
                 $groupInfos[] = [
-                    'count' => count($group['photos']),
+                    'count' => $sourceCount,
                     'month' => $monthNum,
                     'order' => count($groupInfos),
                     'photos' => $selected
                 ];
             }
         }
+        if ($droppedInMonth > 0) {
+            logMessage("Year in Review: {$year}-{$monthNum}: skipped {$droppedInMonth} photos with no thumbnail cache key", 'WARNING');
+        }
+        $slideCount += count($locationSlides);
 
         if (empty($locationSlides)) {
             continue;
@@ -577,6 +1002,9 @@ function buildYearData(SynologyAPI $api, int $year): array {
             'location_slides' => $locationSlides
         ];
     }
+
+    logMessage("Year in Review: {$year}: {$placeGroupCount} place groups -> {$slideCount} slides ("
+        . YEAR_CLUSTER_RADIUS_KM . ' km)', 'INFO');
 
     // Year cover, then up to 3 photos per month (skipping the cover)
     $allGroupInfos = [];
@@ -604,10 +1032,10 @@ function buildYearData(SynologyAPI $api, int $year): array {
 /**
  * Add "src" to every photo: the static cached file when it exists, else the
  * on-demand endpoint. Decided per response, never stored. The year cover uses
- * size xl; month summary photos and location grid photos size m. Synology's
- * m is 320px on the short edge, which already exceeds a ~165px grid tile on
- * the iPad's non-Retina screen (panoramas included), at a fraction of xl's
- * decoded memory (xl grids crashed the iPad 2).
+ * size xl; month summary photos size m. Location grid photos get both: "src"
+ * (m, 320px on the short edge) and "src_xl" (xl, 1280px). The slideshow uses
+ * m unless a tile is drawn more than 320px on its short edge, and then only
+ * within a per-slide decoded-memory budget (all-xl grids crashed the iPad 2).
  */
 function withYearPhotoSrc(array $data, int $year): array {
     if (is_array($data['year_summary']['cover'] ?? null)) {
@@ -626,6 +1054,7 @@ function withYearPhotoSrc(array $data, int $year): array {
             foreach (($slide['photos'] ?? []) as $p => $photo) {
                 $id = (int)($photo['id'] ?? 0);
                 $data['months'][$m]['location_slides'][$s]['photos'][$p]['src'] = yearThumbSrc($year, $id, 'm');
+                $data['months'][$m]['location_slides'][$s]['photos'][$p]['src_xl'] = yearThumbSrc($year, $id, 'xl');
             }
         }
     }

@@ -4,6 +4,7 @@
     'use strict';
 
     // DOM elements
+    var slideshowContainer = document.getElementById('slideshow-container');
     var loadingScreen = document.getElementById('loading-screen');
     var loadingBackBtn = document.getElementById('loading-back-btn');
     var errorScreen = document.getElementById('error-screen');
@@ -34,10 +35,19 @@
     var activeXhr = null;
     var preloaded = [];
     var preloadedIndex = -1;
+    var preloadedKey = ''; // grid size (gridKey()) the preload was made for
     var coverImage = null;
     var resizeTimer = null;
     var GRID_FIT_RETRIES = 3; // smaller re-layouts of a grid that doesn't fit
     var LIST_ROW_HEIGHT = 24; // px, every month place-list row (see year-slideshow.css)
+    // Location slide grid area. Keep in sync with year-slideshow.css:
+    // #photo-display padding 40px 48px 80px, .location-header 62px + 16px gap
+    var GRID_PAD_X = 48 + 48;
+    var GRID_PAD_Y = 40 + 80 + 62 + 16;
+    var GRID_MARGIN = 6; // jG margins between tiles
+    var GRID_SLACK = 2; // px a predicted layout must leave free (rounding)
+    var XL_MIN_SHORT_EDGE = 320; // m is 320px on the short edge: larger tiles may use xl
+    var SLIDE_DECODE_BUDGET = 18 * 1024 * 1024; // bytes of decoded images per location slide
     var DOT = ' \u00b7 ';
 
     // Config
@@ -350,9 +360,14 @@
                 renderLocationSlide(slide.data, index);
             }
 
-            // Fade in
+            // Fade in. The preload (and its layout search) waits until the
+            // fade-in is done, so it doesn't compete with it.
             target.style.opacity = '1';
-            preloadNext(index);
+            setTimeout(function() {
+                if (index === currentIndex) {
+                    preloadNext(index);
+                }
+            }, 350);
         }, 300);
     }
 
@@ -375,11 +390,13 @@
             if (slide.type !== 'location') {
                 continue;
             }
-            if (target === preloadedIndex) {
-                // Already preloading this slide (e.g. passing a month summary)
+            if (target === preloadedIndex && preloadedKey === gridKey()) {
+                // Already preloading this slide at this size (e.g. passing a
+                // month summary); after a rotation it is redone
                 return;
             }
             preloadedIndex = target;
+            preloadedKey = gridKey();
             var monthPhotos = monthSlide ? (monthSlide.data.photos || []) : [];
             for (i = 0; i < monthPhotos.length && i < 3; i++) {
                 if (safeSrc(monthPhotos[i].src)) {
@@ -388,10 +405,11 @@
                     images.push(mImg);
                 }
             }
-            var photos = slide.data.photos || [];
-            for (i = 0; i < photos.length && i < 9; i++) {
+            // The same sizes (m or xl) the slide will render with
+            var srcs = slideLayout(slide).srcs;
+            for (i = 0; i < srcs.length && i < 9; i++) {
                 var img = new Image();
-                img.src = safeSrc(photos[i].src);
+                img.src = srcs[i];
                 images.push(img);
             }
             break;
@@ -631,10 +649,11 @@
     }
 
     /**
-     * Rotation/resize: re-fit the month slide on screen (no fade). Skipped while
-     * a fade is pending: currentIndex already points at the incoming slide, but
-     * the outgoing one (maybe a grid) is still in place, and the fade callback
-     * renders the incoming slide at the new size anyway.
+     * Rotation/resize: re-fit the month or location slide on screen (no fade),
+     * then redo the preload for the new size. Skipped while a fade is pending:
+     * currentIndex already points at the incoming slide, but the outgoing one
+     * (maybe a grid) is still in place, and the fade callback renders the
+     * incoming slide at the new size anyway.
      */
     function handleResize() {
         clearTimeout(resizeTimer);
@@ -644,10 +663,306 @@
                 return;
             }
             var slide = slides[currentIndex];
-            if (slide && slide.type === 'month-summary' && statDisplay.style.display !== 'none') {
-                renderMonthSummarySlide(slide.data);
+            if (!slide) {
+                return;
             }
+            if (slide.type === 'month-summary' && statDisplay.style.display !== 'none') {
+                renderMonthSummarySlide(slide.data);
+            } else if (slide.type === 'location' && photoDisplay.style.display !== 'none' &&
+                    slide.layoutKey !== gridKey()) {
+                // Only when the grid size changed. setPhotoDisplay() destroys the
+                // old grid (and its interval); a pending fit-retry sees a
+                // different element and stops
+                renderLocationSlide(slide.data, currentIndex);
+            }
+            // Redone only if the size changed (see preloadNext())
+            preloadNext(currentIndex);
         }, 250);
+    }
+
+    /**
+     * The area a location slide's grid may fill, {w, h} in px, from the
+     * always-displayed container (so it works for a preload during a stat
+     * slide too): 928x570 at 1024x768, 672x826 at 768x1024
+     */
+    function gridArea() {
+        return {
+            w: Math.floor(slideshowContainer.clientWidth - GRID_PAD_X),
+            h: Math.floor(slideshowContainer.clientHeight - GRID_PAD_Y)
+        };
+    }
+
+    /**
+     * gridArea() as a cache key, "928x570"
+     */
+    function gridKey() {
+        var area = gridArea();
+        return area.w + 'x' + area.h;
+    }
+
+    /**
+     * What justifiedGallery 3.8.1 will draw for these aspect ratios (w/h) at
+     * gallery width W and rowHeight rh, with our options (margins 6, border 0,
+     * lastRow 'center', maxRowHeight false, justifyThreshold 0.9): an exact
+     * port of its row builder. Returns {height, area} (area = sum of tile
+     * w*h), plus tiles [{w, h}] when withTiles. Stops early, with a height
+     * over maxH, once the rows already exceed maxH (if given). No closures or
+     * per-row arrays: the search calls this ~1,800 times per slide.
+     */
+    function simulateJustified(ars, W, rh, withTiles, maxH) {
+        var M = GRID_MARGIN;
+        var tiles = withTiles ? [] : null;
+        var n = ars.length;
+        var limit = maxH > 0 ? maxH + M : Infinity;
+        var start = 0; // first photo of the row being built
+        var bufAR = 0;
+        var rowW = 0;
+        var offY = 0;
+        var rows = 0;
+        var area = 0;
+
+        for (var i = 0; i <= n; i++) {
+            var isLast = i === n;
+            if (!isLast) {
+                // jG measures the space before the push, then adds the new ratio twice
+                var space = W - (i - start - 1) * M;
+                var ar = ars[i];
+                bufAR += ar;
+                rowW += ar * rh;
+                if (!(space / (bufAR + ar) < rh)) {
+                    continue;
+                }
+            } else if (start === n) {
+                // The last photo ended a full row: no margin after it
+                if (rows > 0) {
+                    offY -= M;
+                }
+                break;
+            }
+
+            // Flush photos start..end-1 as one row
+            var end = isLast ? n : i + 1;
+            var g = W - (end - start - 1) * M;
+            var h = g / bufAR;
+            var justified = true;
+            if (isLast && !(rowW / g > 0.9)) {
+                // A short last row: the average height of the rows above, centred
+                justified = false;
+                h = rh;
+                if (rows > 0) {
+                    h = (offY - M * rows) / rows;
+                    justified = h * bufAR / g > 0.9;
+                    if (justified) {
+                        h = g / bufAR;
+                    }
+                }
+            }
+            var sumW = 0;
+            for (var e = start; e < end; e++) {
+                var w = Math.round(justified ? (e === end - 1 ? g : h * ars[e]) : h * ars[e]);
+                g -= w;
+                sumW += w;
+                if (tiles) {
+                    tiles.push({ w: w, h: h });
+                }
+            }
+            area += sumW * h;
+            start = end;
+            bufAR = 0;
+            rowW = 0;
+            if (isLast) {
+                offY += h;
+            } else {
+                offY += h + M;
+                rows++;
+                if (offY > limit) {
+                    // Already too tall (the final height is at least offY - M)
+                    return { height: offY - M, area: area, tiles: tiles };
+                }
+            }
+        }
+        return { height: offY, area: area, tiles: tiles };
+    }
+
+    /**
+     * The gallery width and rowHeight whose justifiedGallery layout covers the
+     * most of the area while fitting its height (2-9 photos). A coarse pass,
+     * then a fine one around the best; only a strictly larger area wins, so
+     * the result is deterministic. Narrower galleries allow 3-5 photos to form
+     * taller rows. Returns {width, rowHeight, height, tiles}, or null.
+     */
+    function bestGridLayout(ars, area) {
+        var maxH = area.h - GRID_SLACK;
+        var wMin = Math.round(0.4 * area.w);
+        var bestW = 0;
+        var bestRh = 0;
+        var bestArea = -1;
+        var W;
+        var rh;
+        var sim;
+
+        for (W = area.w; W >= wMin; W -= 24) {
+            for (rh = area.h; rh >= 40; rh -= 8) {
+                sim = simulateJustified(ars, W, rh, false, maxH);
+                if (sim.height <= maxH && sim.area > bestArea) {
+                    bestArea = sim.area;
+                    bestW = W;
+                    bestRh = rh;
+                }
+            }
+        }
+        if (bestArea < 0) {
+            return null;
+        }
+        var cW = bestW;
+        var cRh = bestRh;
+        for (W = Math.min(area.w, cW + 24); W >= Math.max(wMin, cW - 24); W -= 4) {
+            for (rh = Math.min(area.h, cRh + 8); rh >= Math.max(40, cRh - 8); rh -= 2) {
+                sim = simulateJustified(ars, W, rh, false, maxH);
+                if (sim.height <= maxH && sim.area > bestArea) {
+                    bestArea = sim.area;
+                    bestW = W;
+                    bestRh = rh;
+                }
+            }
+        }
+        sim = simulateJustified(ars, bestW, bestRh, true, 0);
+        return { width: bestW, rowHeight: bestRh, height: sim.height, tiles: sim.tiles };
+    }
+
+    /**
+     * Estimated decoded bytes of a photo's thumbnail capped at cap px on the
+     * short edge (m: 320, xl: 1280). Unknown size: an m 4:3 portrait.
+     */
+    function decodedBytes(photo, cap) {
+        if (!(photo.w > 0 && photo.h > 0)) {
+            return 320 * 427 * 4;
+        }
+        var s0 = Math.min(photo.w, photo.h);
+        var l0 = Math.max(photo.w, photo.h);
+        var s1 = Math.min(cap, s0);
+        return s1 * Math.round(s1 * l0 / s0) * 4;
+    }
+
+    /**
+     * Image URL per tile: m, upgraded to xl for tiles drawn more than 320px on
+     * their short edge, largest first, while the slide's decoded total stays
+     * within SLIDE_DECODE_BUDGET. Returns {srcs, bytes}.
+     */
+    function chooseTileSrcs(photos, tiles) {
+        var srcs = [];
+        var bytes = 0;
+        var candidates = [];
+        var i;
+        for (i = 0; i < photos.length; i++) {
+            srcs.push(safeSrc(photos[i].src));
+            bytes += decodedBytes(photos[i], 320);
+            var tile = tiles[i];
+            if (tile && photos[i].w > 0 && photos[i].h > 0 &&
+                    Math.min(tile.w, tile.h) > XL_MIN_SHORT_EDGE && safeSrc(photos[i].src_xl)) {
+                candidates.push(i);
+            }
+        }
+        candidates.sort(function(a, b) {
+            var d = tiles[b].w * tiles[b].h - tiles[a].w * tiles[a].h;
+            return d !== 0 ? d : a - b;
+        });
+        for (var c = 0; c < candidates.length; c++) {
+            var p = photos[candidates[c]];
+            var extra = decodedBytes(p, 1280) - decodedBytes(p, 320);
+            if (bytes + extra <= SLIDE_DECODE_BUDGET) {
+                srcs[candidates[c]] = safeSrc(p.src_xl);
+                bytes += extra;
+            }
+        }
+        return { srcs: srcs, bytes: bytes };
+    }
+
+    /**
+     * A location slide's layout for the current screen size, cached on the
+     * slide until the size changes: {mode: 'single'|'grid', area, width (px,
+     * or 0 for full width), rowHeight, tiles, srcs, bytes}. Computed by the
+     * preload (idle time) and reused by the render.
+     */
+    function slideLayout(slide) {
+        var area = gridArea();
+        var key = area.w + 'x' + area.h;
+        if (slide.layout && slide.layoutKey === key) {
+            return slide.layout;
+        }
+        var photos = slide.data.photos || [];
+        var layout = { mode: 'grid', area: area, width: 0, rowHeight: 165, tiles: [] };
+        var i;
+
+        if (photos.length === 1) {
+            layout.mode = 'single';
+            var p = photos[0];
+            if (p.w > 0 && p.h > 0) {
+                var scale = Math.min(area.w / p.w, area.h / p.h);
+                layout.tiles = [{ w: Math.floor(p.w * scale), h: Math.floor(p.h * scale) }];
+            }
+        } else if (photos.length > 1) {
+            var ars = [];
+            for (i = 0; i < photos.length; i++) {
+                ars.push(photos[i].w > 0 && photos[i].h > 0 ? photos[i].w / photos[i].h : 4 / 3);
+            }
+            var best = bestGridLayout(ars, area);
+            if (best) {
+                layout.width = best.width;
+                layout.rowHeight = best.rowHeight;
+                layout.height = best.height;
+                layout.tiles = best.tiles;
+            }
+        }
+
+        var chosen = chooseTileSrcs(photos, layout.tiles);
+        layout.srcs = chosen.srcs;
+        layout.bytes = chosen.bytes;
+        slide.layout = layout;
+        slide.layoutKey = key;
+        return layout;
+    }
+
+    /**
+     * Merged slides list their member places after the photo count, as many
+     * as fit on the one-line sub-header, then "+N" for the rest:
+     * "JANUARY 2023 · 28 PHOTOS · KLEIN · SPRING · BRIDGELAND +2". At least one
+     * name is shown; if even that doesn't fit, the name itself is clipped with
+     * an ellipsis so "+N" stays visible. Set as text, measured in place, so
+     * the header keeps its fixed height.
+     */
+    function fitPlaceNames(places, base) {
+        if (!places || typeof places.length !== 'number' || places.length === 0) {
+            return;
+        }
+        var subEl = photoDisplay.getElementsByClassName('location-sub')[0];
+        var label = subEl ? subEl.getElementsByClassName('stat-label')[0] : null;
+        if (!label) {
+            return;
+        }
+        var names = [];
+        for (var i = 0; i < places.length; i++) {
+            names.push(String(places[i]));
+        }
+        var namesEl = document.createElement('span');
+        var moreEl = document.createElement('span');
+        label.textContent = base;
+        label.appendChild(namesEl);
+        label.appendChild(moreEl);
+
+        var right = subEl.getBoundingClientRect().right;
+        for (var k = names.length; k >= 1; k--) {
+            namesEl.textContent = DOT + names.slice(0, k).join(DOT);
+            moreEl.textContent = k < names.length ? ' +' + (names.length - k) : '';
+            if (moreEl.getBoundingClientRect().right <= right &&
+                    namesEl.getBoundingClientRect().right <= right) {
+                return;
+            }
+        }
+        // Even one name is too long: clip it, keep "+N"
+        var avail = right - namesEl.getBoundingClientRect().left - moreEl.getBoundingClientRect().width - 2;
+        namesEl.className = 'place-names-clip';
+        namesEl.style.maxWidth = Math.max(0, Math.floor(avail)) + 'px';
     }
 
     /**
@@ -664,18 +979,38 @@
         html += '<div class="location-sub"><span class="rule"></span><span class="stat-label">' + escapeHtml(sub) + '</span></div>';
         html += '</div>';
 
-        html += '<div class="photo-grid" id="justified-gallery">';
-        for (var i = 0; i < photos.length; i++) {
-            var photo = photos[i];
-            html += '<div><img src="' + escapeHtml(safeSrc(photo.src)) + '" alt="' + escapeHtml(photo.filename || '') + '"';
-            if (photo.w && photo.h) {
-                html += ' width="' + escapeHtml(String(photo.w)) + '" height="' + escapeHtml(String(photo.h)) + '"';
+        var layout = slideLayout(slides[index]);
+        var area = layout.area;
+        var i;
+        if (layout.mode === 'single') {
+            // One photo: contained and centred in the grid area, no jG
+            var photo = photos[0];
+            var tile = layout.tiles[0];
+            html += '<div class="photo-single" style="height:' + escapeHtml(String(area.h)) + 'px">';
+            html += '<img src="' + escapeHtml(layout.srcs[0]) + '" alt="' + escapeHtml(photo.filename || '') + '"';
+            if (tile) {
+                html += ' width="' + escapeHtml(String(tile.w)) + '" height="' + escapeHtml(String(tile.h)) + '"' +
+                    ' style="margin-top:' + escapeHtml(String(Math.floor((area.h - tile.h) / 2))) + 'px"';
+            } else {
+                html += ' style="max-width:100%;max-height:' + escapeHtml(String(area.h)) + 'px"';
             }
             html += '></div>';
+        } else {
+            html += '<div class="photo-grid" id="justified-gallery"' +
+                (layout.width ? ' style="width:' + escapeHtml(String(layout.width)) + 'px"' : '') + '>';
+            for (i = 0; i < photos.length; i++) {
+                // width/height: jG reads each photo's aspect ratio from them
+                html += '<div><img src="' + escapeHtml(layout.srcs[i]) + '" alt="' + escapeHtml(photos[i].filename || '') + '"';
+                if (photos[i].w && photos[i].h) {
+                    html += ' width="' + escapeHtml(String(photos[i].w)) + '" height="' + escapeHtml(String(photos[i].h)) + '"';
+                }
+                html += '></div>';
+            }
+            html += '</div>';
         }
-        html += '</div>';
 
         setPhotoDisplay(html);
+        fitPlaceNames(locationData.places, sub);
 
         // A failed image becomes a blank tile; the layout holds
         var imgs = photoDisplay.getElementsByTagName('img');
@@ -685,16 +1020,14 @@
             };
         }
 
-        if (window.jQuery && jQuery.fn.justifiedGallery) {
-            // Start sized so 9 photos fit on one screen at 1024x768, landscape and
-            // portrait, with no scrollbar. #photo-display's padding (40px top, 80px
-            // bottom) and the 62px header + 16px gap leave the grid ~570px in
-            // landscape, so 3 rows of <= ~180px: maxRowHeight caps stretched rows
-            // (jG's last row takes the average). In portrait, rowHeight <= 175
-            // keeps three 4:3 photos per row. Grids that still don't fit (e.g. a
-            // panorama on its own row, or 16:9 photos in portrait) are shrunk by
-            // layoutGallery().
-            layoutGallery(index, 165, 175, GRID_FIT_RETRIES);
+        if (layout.mode === 'grid' && window.jQuery && jQuery.fn.justifiedGallery) {
+            // slideLayout() picked the gallery width and rowHeight whose
+            // simulated jG layout fills the most of the area and still fits
+            // (2px slack), so jG needs no maxRowHeight (no cropping); a short
+            // last row is centred at the height of the rows above. If the real
+            // grid still overflows (rounding, or no layout fitted), it is
+            // re-laid out smaller by layoutGallery().
+            layoutGallery(index, layout.rowHeight, GRID_FIT_RETRIES);
         }
     }
 
@@ -707,11 +1040,12 @@
     }
 
     /**
-     * Lay out the grid with justifiedGallery. If it doesn't fit, destroy it and
-     * lay it out again with rows 15% lower, up to triesLeft more times; after
-     * that it keeps its scrollbar. Only for the slide still on screen.
+     * Lay out the grid with justifiedGallery (at the inline width set by
+     * renderLocationSlide()). If it doesn't fit, destroy it and lay it out
+     * again with rows 15% lower, up to triesLeft more times; after that it
+     * keeps its scrollbar. Only for the slide still on screen.
      */
-    function layoutGallery(slideIndex, rowHeight, maxRowHeight, triesLeft) {
+    function layoutGallery(slideIndex, rowHeight, triesLeft) {
         var $g = jQuery('#justified-gallery');
         if (!$g.length) {
             return;
@@ -731,17 +1065,16 @@
                     return;
                 }
                 destroyGallery();
-                layoutGallery(slideIndex, Math.round(rowHeight * 0.85),
-                    Math.round(maxRowHeight * 0.85), triesLeft - 1);
+                layoutGallery(slideIndex, Math.round(rowHeight * 0.85), triesLeft - 1);
             }, 0);
         });
 
         $g.justifiedGallery({
             rowHeight: rowHeight,
-            maxRowHeight: maxRowHeight,
-            margins: 6,
+            maxRowHeight: false,
+            margins: GRID_MARGIN,
             border: 0,
-            lastRow: 'nojustify',
+            lastRow: 'center',
             captions: false,
             randomize: false,
             waitThumbnailsLoad: false,

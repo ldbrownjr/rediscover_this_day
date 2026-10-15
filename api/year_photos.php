@@ -3,9 +3,12 @@
  * Year in Review slide list (JSON): GET api/year_photos.php?year=YYYY
  *
  * Queries the year's photos from Synology and groups them into a year summary,
- * month summaries and location slides (up to 9 photos each). The year summary
+ * month summaries and location slides (up to 9 photos each; nearby places
+ * share a slide by GPS, and a merged slide lists its member cities in
+ * "places"; GPS itself is never returned). The year summary
  * has a "cover" photo ({id, w, h, src} at size xl, or null) and each month
- * summary has "photos" (up to 3 {id, w, h, src} at size m). No thumbnails are
+ * summary has "photos" (up to 3 {id, w, h, src} at size m). Location photos
+ * have "src" (size m) and "src_xl" (size xl, used for large tiles). No thumbnails are
  * downloaded here: each photo's "src" is either the cached file or
  * api/year_thumb.php, which fetches it on demand.
  *

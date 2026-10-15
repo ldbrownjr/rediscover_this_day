@@ -168,9 +168,9 @@ Controls appear when you move the mouse or touch the screen and auto-hide after 
 
 ### Year in Review
 
-Tap **Year in Review** on the slideshow (or open `year-review.php`) to pick a year. Years you have opened before show a cover photo with their city and photo counts; years never opened show a plain tile. A year plays as a full-screen cover with the year's totals, then for each month a photo strip with the places visited, followed by a photo grid per place.
+Tap **Year in Review** on the slideshow (or open `year-review.php`) to pick a year. Years you have opened before show a cover photo with their city and photo counts; years never opened show a plain tile. A year plays as a full-screen cover with the year's totals, then for each month a photo strip with the places visited, followed by a photo grid per place. Nearby places (within about 20 km, by GPS) share one slide, titled after the main town (e.g. "Klein area, Texas") with the other towns listed under the title.
 
-The first open of a year builds its slide list from Synology (this can take up to a couple of minutes for a big year); after that it is cached in `cache/year_review/`. The API (`api/year_photos.php?year=YYYY`) returns `year_summary.cover` (the year's cover photo) and `months[].summary.photos` (up to 3 photos per month), each with a `src`. Thumbnails are fetched on demand by `api/year_thumb.php`: size `xl` for the full-screen year cover, size `m` (`&size=m`) for the location grids, month strips and year picker tiles (m keeps memory low enough for the iPad 2; xl grids crashed it).
+The first open of a year builds its slide list from Synology (this can take up to a couple of minutes for a big year); after that it is cached in `cache/year_review/`. The API (`api/year_photos.php?year=YYYY`) returns `year_summary.cover` (the year's cover photo) and `months[].summary.photos` (up to 3 photos per month), each with a `src`. Thumbnails are fetched on demand by `api/year_thumb.php`: size `xl` for the full-screen year cover, size `m` (`&size=m`) for the month strips, year picker tiles and location grid tiles, with `xl` only for grid tiles drawn larger than m (at most 18 MB of decoded images per slide; all-xl grids crashed the iPad 2). Location grids are sized to fill the screen in both orientations; a single photo is shown large and centred.
 
 ### Admin Functions
 

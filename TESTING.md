@@ -153,12 +153,14 @@ Use this checklist to verify the application is working correctly.
 - [ ] A big year never opened before starts within seconds
 - [ ] Grid images are mostly ready when each location slide fades in
 - [ ] Every 9-photo grid fits on one screen with no scrollbar, in landscape and portrait (include a panorama and a slide of 16:9 photos)
+- [ ] Grids of 2–4 photos fill most of the screen (centred, short last row centred); a 1-photo slide shows the photo large and centred; rotating on a 1-, 3- and 9-photo slide re-fits it with no scrollbar
 - [ ] Avenir Next shows three distinct weights (Regular, Medium, DemiBold); DemiBold is not a smeared synthetic bold
 - [ ] Picker: opened years show a cover photo with "N CITIES · N PHOTOS"; never-opened years show a plain tile with an amber rule; the page loads and scrolls with no reload (a reload means memory pressure)
 - [ ] Year summary: full-bleed cover with a smooth dark gradient, "A YEAR OF PLACES", the year and the stats row; with no cover, a dark slide with a short amber rule
 - [ ] Month summary: up to 3 photos in a strip, the month name and year, the stats line and a two-column place list (no dashes or bullets); a busy month ends with "+ N MORE"; rotating the iPad on a month slide re-fits the list
 - [ ] Location slide: single-line title (long titles end in "…"), "MONTH YEAR · N PHOTOS" under an amber rule
-- [ ] Controls: ←, ‹, play/pause and › glyphs render; the 40px buttons are easy to tap; the counter reads "2 / 163"
+- [ ] Merged places: January 2023 has "Klein area, Texas" with "· KLEIN · SPRING · BRIDGELAND" (then "+N" if the rest don't fit) after the photo count, and "Key West area, Florida"; June 2023 has "San Miguel de Cozumel area, Quintana Roo, Mexico" while Mahahual and Tulum stay separate; the sub-line stays one line in both orientations
+- [ ] Controls: ←, ‹, play/pause and › glyphs render; the 40px buttons are easy to tap; the counter reads "2 / 98" for 2023 (80 for 2019)
 - [ ] A failed tile shows as a blank dark tile and the layout holds
 - [ ] Back works during loading, on the error screen and on the slideshow
 - [ ] Turn on Airplane mode, open a year: "Unable to load photos" with Try Again; Try Again works once back online
@@ -170,9 +172,10 @@ Use this checklist to verify the application is working correctly.
 ### Endpoints (local `php -S`)
 
 - [ ] `api/year_photos.php?year=Y`: first call builds the list (seconds), the next is cached (`"cached": true`, well under 0.5s)
-- [ ] `api/year_thumb.php`: a miss returns a JPEG and creates `cache/year_review/{Y}_{id}_{xl|m}.jpg`; the next list call returns that file as a direct `src`; location grid photos are all size m, the year cover xl
+- [ ] Place grouping: 2019 has 80 slides and 2023 98; the log has one "Year in Review: 2023: N place groups -> 85 slides (20 km)" line per build; no `gps`/`latitude` anywhere in the response, the list file or the log; single-place slides have no `places`; a schema-3 list file is rebuilt on first open
+- [ ] `api/year_thumb.php`: a miss returns a JPEG and creates `cache/year_review/{Y}_{id}_{xl|m}.jpg`; the next list call returns that file as a direct `src`; location grid photos are size m, or xl for tiles drawn larger than 320 px on the short edge (each location photo has `src` (m) and `src_xl`), the year cover xl
 - [ ] iPad 2: step through every location slide of a big year (e.g. 2023) without the app dropping back to the Home Screen
-- [ ] The list response has `year_summary.cover` `{id, w, h, src}` (src at size xl) and `months[].summary.photos` (up to 3, src at size m with `&size=m` or `_m.jpg`); an older-schema (1 or 2) list file is rebuilt on first open; portrait photos keep portrait `w`/`h` (compare with the real m thumbnail)
+- [ ] The list response has `year_summary.cover` `{id, w, h, src}` (src at size xl) and `months[].summary.photos` (up to 3, src at size m with `&size=m` or `_m.jpg`); an older-schema (1–3) list file is rebuilt on first open; portrait photos keep portrait `w`/`h` (compare with the real m thumbnail)
 - [ ] `size=m` for an allow-listed id returns 200 image/jpeg and creates `{Y}_{id}_m.jpg`; `size=xx`, `size=M` and `size[]=m` return 404; no `size` still serves xl
 - [ ] Bad input (`id=../x`, `id=1e3`, empty id, `id[]=1`, unknown id, years out of range) returns an empty 404 with no file written and no Synology call
 - [ ] 9 parallel misses with no `config/synology_session.php`: all 200, exactly one Synology login in the log (DEBUG)
