@@ -8,11 +8,17 @@
  * and returns an empty response.
  *
  * Per-year file cache/year_review/{year}.cache.php (guarded JSON):
- *   { "schema": 1, "year": 2019, "generated_at": <unix>,
- *     "data":   { "year_summary": {...}, "months": [...] },
+ *   { "schema": 3, "year": 2019, "generated_at": <unix>,
+ *     "data":   { "year_summary": { ..., "cover": {id, w, h} | null },
+ *                 "months": [ { "summary": { ..., "photos": [ {id, w, h}, ... up to 3 ] },
+ *                               "location_slides": [...] } ] },
  *     "thumbs": { "<id>": { "k": "<cache_key>", "u": <unit_id|null> } } }
  * "thumbs" lists ONLY the photos selected into slides; it is the allow-list
- * for api/year_thumb.php.
+ * for api/year_thumb.php. The year cover and the month photos are always picked
+ * from those photos. The cover is shown at size xl, month photos (and picker
+ * tiles) at size m; location grids at xl. Older-schema files are rebuilt
+ * (schema 3: w/h are additional.resolution as-is, which Synology already
+ * reports display-oriented; schema 2 wrongly swapped them for EXIF 5-8).
  *
  * Shared Synology session config/synology_session.php (guarded JSON):
  *   { "sid": "...", "created": <unix> }
@@ -23,8 +29,9 @@
 require_once __DIR__ . '/../common.php';
 require_once __DIR__ . '/synology.php';
 
-define('YEAR_CACHE_SCHEMA', 1);
-define('YEAR_THUMB_SIZE', 'xl');
+define('YEAR_CACHE_SCHEMA', 3);
+define('YEAR_THUMB_SIZE', 'xl'); // default size
+define('YEAR_THUMB_SIZES', ['xl', 'm']); // every size that may be cached and served
 define('YEAR_REVIEW_DIR', CACHE_PATH . '/year_review');
 define('YEAR_PHOTOS_PER_SLIDE', 9);
 define('SYNOLOGY_SESSION_PATH', BASE_PATH . '/config/synology_session.php');
@@ -43,10 +50,35 @@ function yearCachePath(int $year): string {
 }
 
 /**
- * Path of a cached thumbnail (built from ints only).
+ * Path of a cached thumbnail (built from ints and a size from YEAR_THUMB_SIZES).
+ * Throws InvalidArgumentException for any other size.
  */
-function yearThumbPath(int $year, int $id): string {
-    return YEAR_REVIEW_DIR . "/{$year}_{$id}_" . YEAR_THUMB_SIZE . '.jpg';
+function yearThumbPath(int $year, int $id, string $size = YEAR_THUMB_SIZE): string {
+    if (!in_array($size, YEAR_THUMB_SIZES, true)) {
+        throw new InvalidArgumentException('Unknown thumbnail size');
+    }
+    return YEAR_REVIEW_DIR . "/{$year}_{$id}_{$size}.jpg";
+}
+
+/**
+ * Relative URL of a thumbnail: the static cached file when it exists, else the
+ * on-demand endpoint (with &size=m for the m size). Any change to these two
+ * forms must also update isYearThumbSrc() and safeSrc() in js/year-slideshow.js.
+ */
+function yearThumbSrc(int $year, int $id, string $size): string {
+    $path = yearThumbPath($year, $id, $size);
+    if (is_file($path) && filesize($path) > 0) {
+        return 'cache/year_review/' . basename($path);
+    }
+    return 'api/year_thumb.php?year=' . $year . '&id=' . $id . ($size === 'm' ? '&size=m' : '');
+}
+
+/**
+ * Whether $src is one of the two forms yearThumbSrc() builds. Used where a src
+ * lands inside CSS url(...), where h() alone can't stop a break-out.
+ */
+function isYearThumbSrc(string $src): bool {
+    return preg_match('#^(cache/year_review/\d{4}_\d+_(xl|m)\.jpg|api/year_thumb\.php\?year=\d{4}&id=\d+(&size=(xl|m))?)$#D', $src) === 1;
 }
 
 /**
@@ -54,20 +86,32 @@ function yearThumbPath(int $year, int $id): string {
  * wrong schema, or (when $requireFresh) no longer fresh:
  *  - past year: must have been generated after the year ended;
  *  - current year: must have been generated today.
+ * $reason says why it returned null: 'missing', 'invalid' (unreadable, not
+ * JSON, or bad fields at the current schema), 'schema' (an older/other schema,
+ * expected after a schema bump) or 'stale'; null when the list is returned.
  */
-function readYearCache(int $year, bool $requireFresh): ?array {
+function readYearCache(int $year, bool $requireFresh, ?string &$reason = null): ?array {
+    $reason = null;
     $path = yearCachePath($year);
     if (!is_file($path)) {
+        $reason = 'missing';
         return null;
     }
     $json = readGuardedFile($path);
     $cache = $json === null ? null : json_decode($json, true);
-    if (!is_array($cache)
-        || ($cache['schema'] ?? null) !== YEAR_CACHE_SCHEMA
-        || ($cache['year'] ?? null) !== $year
+    if (!is_array($cache)) {
+        $reason = 'invalid';
+        return null;
+    }
+    if (($cache['schema'] ?? null) !== YEAR_CACHE_SCHEMA) {
+        $reason = 'schema';
+        return null;
+    }
+    if (($cache['year'] ?? null) !== $year
         || !is_int($cache['generated_at'] ?? null)
         || !is_array($cache['data'] ?? null)
         || !is_array($cache['thumbs'] ?? null)) {
+        $reason = 'invalid';
         return null;
     }
 
@@ -76,9 +120,11 @@ function readYearCache(int $year, bool $requireFresh): ?array {
         $currentYear = (int)date('Y');
         if ($year < $currentYear) {
             if ($generatedAt < mktime(0, 0, 0, 1, 1, $year + 1)) {
+                $reason = 'stale';
                 return null;
             }
         } elseif (date('Y-m-d', $generatedAt) !== date('Y-m-d')) {
+            $reason = 'stale';
             return null;
         }
     }
@@ -192,8 +238,10 @@ function selectYearHighlights(array $photos, int $targetCount = 52): array {
 }
 
 /**
- * Display width/height from additional.resolution (swapped for 90° rotations,
- * EXIF orientation 5-8). Empty array when unknown.
+ * Display width/height from additional.resolution. Empty array when unknown.
+ * Synology already reports resolution display-oriented (after EXIF rotation):
+ * do NOT swap for additional.orientation 5-8. Checked live against the m
+ * thumbnails for every orientation / orientation_original combination.
  */
 function photoDisplaySize(array $photo): array {
     $res = $photo['additional']['resolution'] ?? null;
@@ -206,19 +254,174 @@ function photoDisplaySize(array $photo): array {
     if ($w <= 0 || $h <= 0) {
         return [];
     }
-    $orientation = (int)($photo['additional']['orientation'] ?? 1);
-    if ($orientation >= 5 && $orientation <= 8) {
-        $tmp = $w;
-        $w = $h;
-        $h = $tmp;
-    }
     return ['w' => $w, 'h' => $h];
+}
+
+/**
+ * Whether a selected photo (['id', 'time', 'w'?, 'h'?]) is a landscape picture
+ * suitable for a cover or month strip: known size, 1.3 <= w/h <= 1.9.
+ */
+function isCoverShaped(array $photo): bool {
+    if (!isset($photo['w'], $photo['h']) || $photo['h'] <= 0) {
+        return false;
+    }
+    $ratio = $photo['w'] / $photo['h'];
+    return $ratio >= 1.3 && $ratio <= 1.9;
+}
+
+/**
+ * Median of the photos' times (mean of the two middle values for an even
+ * count). Null for no photos.
+ */
+function medianPhotoTime(array $photos): ?float {
+    if (empty($photos)) {
+        return null;
+    }
+    $times = [];
+    foreach ($photos as $photo) {
+        $times[] = $photo['time'];
+    }
+    sort($times);
+    $n = count($times);
+    $mid = intdiv($n, 2);
+    return $n % 2 ? (float)$times[$mid] : ($times[$mid - 1] + $times[$mid]) / 2;
+}
+
+/**
+ * The photo whose time is closest to $medianTime (default: the photos' own
+ * median time); ties go to the lower id. Null for no photos.
+ */
+function pickMedianTimePhoto(array $photos, ?float $medianTime = null): ?array {
+    if ($medianTime === null) {
+        $medianTime = medianPhotoTime($photos);
+    }
+    $best = null;
+    $bestDist = null;
+    foreach ($photos as $photo) {
+        $dist = abs($photo['time'] - $medianTime);
+        if ($best === null || $dist < $bestDist || ($dist == $bestDist && $photo['id'] < $best['id'])) {
+            $best = $photo;
+            $bestDist = $dist;
+        }
+    }
+    return $best;
+}
+
+/**
+ * Order group infos (['count', 'month', 'order', 'photos']) by source photo
+ * count descending, then earlier month, then the slide order.
+ */
+function sortGroupsBySize(array $groups): array {
+    usort($groups, function ($a, $b) {
+        if ($a['count'] !== $b['count']) {
+            return $b['count'] - $a['count'];
+        }
+        if ($a['month'] !== $b['month']) {
+            return $a['month'] - $b['month'];
+        }
+        return $a['order'] - $b['order'];
+    });
+    return $groups;
+}
+
+/**
+ * Year cover from the selected photos (deterministic):
+ *  1. the median-time cover-shaped photo of the largest group that has one;
+ *  2. else the landscape photo (w > h) closest to the median time of all
+ *     selected photos;
+ *  3. else the first selected photo; null if there are none.
+ */
+function pickYearCover(array $groups): ?array {
+    foreach (sortGroupsBySize($groups) as $group) {
+        $shaped = array_values(array_filter($group['photos'], 'isCoverShaped'));
+        if (!empty($shaped)) {
+            return pickMedianTimePhoto($shaped);
+        }
+    }
+
+    $all = [];
+    foreach ($groups as $group) {
+        foreach ($group['photos'] as $photo) {
+            $all[] = $photo;
+        }
+    }
+    if (empty($all)) {
+        return null;
+    }
+    $wide = array_values(array_filter($all, function ($p) {
+        return isset($p['w'], $p['h']) && $p['w'] > $p['h'];
+    }));
+    if (!empty($wide)) {
+        return pickMedianTimePhoto($wide, medianPhotoTime($all));
+    }
+    return $all[0];
+}
+
+/**
+ * Up to 3 photos for a month summary strip (deterministic), groups taken
+ * largest first:
+ *  1. each group's median-time cover-shaped photo;
+ *  2. the groups' other cover-shaped photos;
+ *  3. any selected photo.
+ * The year cover is skipped unless nothing else is left.
+ */
+function pickMonthPhotos(array $groups, ?int $coverId): array {
+    $groups = sortGroupsBySize($groups);
+    $picked = [];
+    $add = function (array $photo) use (&$picked) {
+        if (count($picked) < 3 && !isset($picked[$photo['id']])) {
+            $picked[$photo['id']] = $photo;
+        }
+    };
+    $notCover = function ($p) use ($coverId) {
+        return $p['id'] !== $coverId;
+    };
+
+    foreach ($groups as $group) {
+        $shaped = array_values(array_filter(array_filter($group['photos'], 'isCoverShaped'), $notCover));
+        if (!empty($shaped)) {
+            $add(pickMedianTimePhoto($shaped));
+        }
+    }
+    foreach ($groups as $group) {
+        foreach (array_filter(array_filter($group['photos'], 'isCoverShaped'), $notCover) as $photo) {
+            $add($photo);
+        }
+    }
+    foreach ($groups as $group) {
+        foreach (array_filter($group['photos'], $notCover) as $photo) {
+            $add($photo);
+        }
+    }
+    foreach ($groups as $group) {
+        foreach ($group['photos'] as $photo) {
+            $add($photo);
+        }
+    }
+
+    return array_values($picked);
+}
+
+/**
+ * Public {id, w, h} of a selected photo (w/h omitted when unknown, as for
+ * location photos).
+ */
+function publicPhotoRef(array $photo): array {
+    $ref = ['id' => $photo['id']];
+    if (isset($photo['w'], $photo['h'])) {
+        $ref['w'] = $photo['w'];
+        $ref['h'] = $photo['h'];
+    }
+    return $ref;
 }
 
 /**
  * Query a year's photos and group them into slides (no thumbnail downloads).
  * Returns ['data' => ['year_summary' => [...], 'months' => [...]],
  *          'thumbs' => [id => ['k' => cache_key, 'u' => unit_id|null]]].
+ * year_summary.cover and months[].summary.photos are picked from the selected
+ * photos (see pickYearCover() / pickMonthPhotos()); the photo times and group
+ * sizes used for that are never stored.
  * Throws Exception if the Synology query fails.
  */
 function buildYearData(SynologyAPI $api, int $year): array {
@@ -260,6 +463,8 @@ function buildYearData(SynologyAPI $api, int $year): array {
 
     $months = [];
     $thumbs = [];
+    // In memory only: per month, its groups' sizes and selected photos (with times)
+    $monthGroupInfos = [];
 
     foreach ($photosByMonth as $monthNum => $monthPhotos) {
         $monthCountries = [];
@@ -313,8 +518,10 @@ function buildYearData(SynologyAPI $api, int $year): array {
         }
 
         $locationSlides = [];
+        $groupInfos = [];
         foreach ($groups as $group) {
             $slidePhotos = [];
+            $selected = [];
             foreach (selectYearHighlights($group['photos'], YEAR_PHOTOS_PER_SLIDE) as $photo) {
                 $cacheKey = $photo['additional']['thumbnail']['cache_key'] ?? null;
                 if (!is_string($cacheKey) || $cacheKey === '') {
@@ -332,7 +539,9 @@ function buildYearData(SynologyAPI $api, int $year): array {
                     'id' => $id,
                     'filename' => is_string($photo['filename'] ?? null) ? $photo['filename'] : ''
                 ];
-                $slidePhotos[] = $entry + photoDisplaySize($photo);
+                $size = photoDisplaySize($photo);
+                $slidePhotos[] = $entry + $size;
+                $selected[] = ['id' => $id, 'time' => (int)$photo['time']] + $size;
             }
 
             if (!empty($slidePhotos)) {
@@ -341,6 +550,12 @@ function buildYearData(SynologyAPI $api, int $year): array {
                     'photo_count' => count($slidePhotos),
                     'photos' => $slidePhotos
                 ];
+                $groupInfos[] = [
+                    'count' => count($group['photos']),
+                    'month' => $monthNum,
+                    'order' => count($groupInfos),
+                    'photos' => $selected
+                ];
             }
         }
 
@@ -348,6 +563,7 @@ function buildYearData(SynologyAPI $api, int $year): array {
             continue;
         }
 
+        $monthGroupInfos[count($months)] = $groupInfos;
         $months[] = [
             'summary' => [
                 'month_number' => $monthNum,
@@ -362,6 +578,20 @@ function buildYearData(SynologyAPI $api, int $year): array {
         ];
     }
 
+    // Year cover, then up to 3 photos per month (skipping the cover)
+    $allGroupInfos = [];
+    foreach ($monthGroupInfos as $groupInfos) {
+        foreach ($groupInfos as $info) {
+            $allGroupInfos[] = $info;
+        }
+    }
+    $cover = pickYearCover($allGroupInfos);
+    $yearSummary['cover'] = $cover === null ? null : publicPhotoRef($cover);
+    foreach ($months as $m => $month) {
+        $months[$m]['summary']['photos'] = array_map('publicPhotoRef',
+            pickMonthPhotos($monthGroupInfos[$m], $cover === null ? null : $cover['id']));
+    }
+
     return [
         'data' => [
             'year_summary' => $yearSummary,
@@ -373,27 +603,66 @@ function buildYearData(SynologyAPI $api, int $year): array {
 
 /**
  * Add "src" to every photo: the static cached file when it exists, else the
- * on-demand endpoint. Decided per response, never stored.
+ * on-demand endpoint. Decided per response, never stored. The year cover and
+ * location photos use size xl, the month summary photos size m.
  */
 function withYearPhotoSrc(array $data, int $year): array {
+    if (is_array($data['year_summary']['cover'] ?? null)) {
+        $id = (int)($data['year_summary']['cover']['id'] ?? 0);
+        $data['year_summary']['cover']['src'] = yearThumbSrc($year, $id, 'xl');
+    }
     if (empty($data['months']) || !is_array($data['months'])) {
         return $data;
     }
     foreach ($data['months'] as $m => $month) {
+        foreach (($month['summary']['photos'] ?? []) as $p => $photo) {
+            $id = (int)($photo['id'] ?? 0);
+            $data['months'][$m]['summary']['photos'][$p]['src'] = yearThumbSrc($year, $id, 'm');
+        }
         foreach (($month['location_slides'] ?? []) as $s => $slide) {
             foreach (($slide['photos'] ?? []) as $p => $photo) {
                 $id = (int)($photo['id'] ?? 0);
-                $path = yearThumbPath($year, $id);
-                if (is_file($path) && filesize($path) > 0) {
-                    $src = 'cache/year_review/' . basename($path);
-                } else {
-                    $src = 'api/year_thumb.php?year=' . $year . '&id=' . $id;
-                }
-                $data['months'][$m]['location_slides'][$s]['photos'][$p]['src'] = $src;
+                $data['months'][$m]['location_slides'][$s]['photos'][$p]['src'] = yearThumbSrc($year, $id, 'xl');
             }
         }
     }
     return $data;
+}
+
+/**
+ * Picker tile data for a year from its list file (stale lists are fine; no
+ * Synology calls): ['src' => m-size cover URL, 'cities' => n, 'total_photos' => n],
+ * or null when there is no usable list (missing, older schema) or no cover.
+ * An existing but unreadable list is logged (once per request; an older schema
+ * is expected after a bump and is not logged).
+ */
+function readYearCover(int $year): ?array {
+    static $warned = false;
+    $cache = readYearCache($year, false, $reason);
+    if ($cache === null) {
+        if ($reason === 'invalid' && !$warned) {
+            $warned = true;
+            logMessage('Year in Review: list file for ' . $year . ' is unreadable or invalid (picker shows a plain tile)', 'WARNING');
+        }
+        return null;
+    }
+    $summary = $cache['data']['year_summary'] ?? null;
+    $cover = is_array($summary) ? ($summary['cover'] ?? null) : null;
+    if (!is_array($cover) || !isset($cover['id']) || !is_int($cover['id']) || $cover['id'] <= 0) {
+        return null;
+    }
+    // The src lands inside CSS url(...) in a style attribute, where h() alone
+    // can't stop a ')' or ';' breaking out. It is built from ints today; keep
+    // this guard in case that ever changes.
+    $src = yearThumbSrc($year, $cover['id'], 'm');
+    if (!isYearThumbSrc($src)) {
+        return null;
+    }
+    return [
+        'src' => $src,
+        'cities' => max(0, (int)($summary['cities'] ?? 0)),
+        'total_photos' => max(0, (int)($summary['total_photos'] ?? 0))
+    ];
 }
 
 /**
@@ -545,8 +814,11 @@ function cleanYearReviewCache(): array {
             logMessage('Year in Review cleanup: ' . basename($listFile) . ' is unreadable or invalid, keeping its thumbnails', 'WARNING');
             continue;
         }
+        // Every size: the m files (picker and month summaries) are referenced too
         foreach (array_keys($cache['thumbs']) as $id) {
-            $keep[$year . '_' . $id . '_' . YEAR_THUMB_SIZE . '.jpg'] = true;
+            foreach (YEAR_THUMB_SIZES as $size) {
+                $keep[$year . '_' . $id . '_' . $size . '.jpg'] = true;
+            }
         }
     }
 

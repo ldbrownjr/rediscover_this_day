@@ -1,9 +1,10 @@
 <?php
 /**
  * Year in Review thumbnail (IMAGE endpoint, not JSON):
- *   GET api/year_thumb.php?year=YYYY&id=N
+ *   GET api/year_thumb.php?year=YYYY&id=N[&size=m]
  *
- * Serves cache/year_review/{year}_{id}_xl.jpg. If it isn't cached yet, looks up
+ * Serves cache/year_review/{year}_{id}_{size}.jpg (size is one of
+ * YEAR_THUMB_SIZES, default xl). If it isn't cached yet, looks up
  * the photo's cache_key/unit_id in the year's list file (the allow-list: only
  * photos selected into slides), fetches it from Synology with the shared sid,
  * saves it atomically and streams it.
@@ -49,11 +50,13 @@ function sendThumbJpeg(string $bytes, int $mtime): void {
 // Validate input (raw strings only: arrays, signs, exponents etc. are rejected)
 $rawYear = $_GET['year'] ?? null;
 $rawId = $_GET['id'] ?? null;
+$rawSize = $_GET['size'] ?? YEAR_THUMB_SIZE;
 $firstYear = (int)($config['photos']['first_year'] ?? 2010);
 $currentYear = (int)date('Y');
 if (!is_string($rawYear) || !ctype_digit($rawYear)
     || !is_string($rawId) || !ctype_digit($rawId) || strlen($rawId) > 10
-    || (int)$rawYear < $firstYear || (int)$rawYear > $currentYear) {
+    || (int)$rawYear < $firstYear || (int)$rawYear > $currentYear
+    || !is_string($rawSize) || !in_array($rawSize, YEAR_THUMB_SIZES, true)) {
     sendThumbStatus(404);
 }
 if (!$config || !isYearReviewEnabled($config)) {
@@ -61,9 +64,10 @@ if (!$config || !isYearReviewEnabled($config)) {
 }
 $year = (int)$rawYear;
 $id = (int)$rawId;
+$size = $rawSize;
 
 // Already cached
-$path = yearThumbPath($year, $id);
+$path = yearThumbPath($year, $id, $size);
 if (is_file($path) && filesize($path) > 0) {
     $bytes = @file_get_contents($path);
     if ($bytes !== false && $bytes !== '') {
@@ -93,7 +97,7 @@ try {
             $unsavedApis[] = $api;
         }
         try {
-            $bytes = $api->fetchThumbnail($id, $cacheKey, YEAR_THUMB_SIZE, $unitId);
+            $bytes = $api->fetchThumbnail($id, $cacheKey, $size, $unitId);
         } catch (Exception $e) {
             // Possibly an expired sid (Synology answers that with an HTML 404, like a
             // deleted photo): re-login and retry once, unless the sid is fresh
@@ -106,7 +110,7 @@ try {
             if (!$persisted) {
                 $unsavedApis[] = $api;
             }
-            $bytes = $api->fetchThumbnail($id, $cacheKey, YEAR_THUMB_SIZE, $unitId);
+            $bytes = $api->fetchThumbnail($id, $cacheKey, $size, $unitId);
         }
     } finally {
         foreach ($unsavedApis as $unsaved) {
