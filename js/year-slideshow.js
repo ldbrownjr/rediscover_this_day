@@ -39,7 +39,10 @@
     var coverImage = null;
     var resizeTimer = null;
     var GRID_FIT_RETRIES = 3; // smaller re-layouts of a grid that doesn't fit
-    var LIST_ROW_HEIGHT = 24; // px, every month place-list row (see year-slideshow.css)
+    var ALBUM_GAP = 8;            // px between month album tiles
+    var ALBUM_MIN_W = 110;        // px, narrowest album tile before the rest go under "+N more"
+    var ALBUM_MAX_RATIO = 1.8;    // widest tile (w/h)
+    var ALBUM_XL_MIN_SHORT = 330; // px, tiles bigger than this on the short edge use the xl photo
     // Location slide grid area. Keep in sync with year-slideshow.css:
     // #photo-display padding 40px 48px 80px, .location-header 62px + 16px gap
     var GRID_PAD_X = 48 + 48;
@@ -261,7 +264,7 @@
         // Month summary, then that month's location slides
         for (var i = 0; i < months.length; i++) {
             var month = months[i];
-            slides.push({ type: 'month-summary', data: month.summary });
+            slides.push({ type: 'month-summary', data: month.summary, albums: month.location_slides || [] });
 
             var locationSlides = month.location_slides || [];
             for (var j = 0; j < locationSlides.length; j++) {
@@ -355,7 +358,7 @@
             if (slide.type === 'year-summary') {
                 renderYearSummarySlide();
             } else if (slide.type === 'month-summary') {
-                renderMonthSummarySlide(slide.data);
+                renderMonthSummarySlide(slide);
             } else if (slide.type === 'location') {
                 renderLocationSlide(slide.data, index);
             }
@@ -397,13 +400,12 @@
             }
             preloadedIndex = target;
             preloadedKey = gridKey();
-            var monthPhotos = monthSlide ? (monthSlide.data.photos || []) : [];
-            for (i = 0; i < monthPhotos.length && i < 3; i++) {
-                if (safeSrc(monthPhotos[i].src)) {
-                    var mImg = new Image();
-                    mImg.src = safeSrc(monthPhotos[i].src);
-                    images.push(mImg);
-                }
+            // The month summary on the way there shows one photo per album
+            var albums = monthSlide ? albumItems(monthSlide) : [];
+            for (i = 0; i < albums.length; i++) {
+                var mImg = new Image();
+                mImg.src = albums[i].src;
+                images.push(mImg);
             }
             // The same sizes (m or xl) the slide will render with
             var srcs = slideLayout(slide).srcs;
@@ -453,171 +455,67 @@
     }
 
     /**
-     * Month place list as rows: country > state > city, missing parts omitted,
-     * a spacer between countries. Each row is {type, text}.
+     * The albums of a month summary: one per location slide, with that slide's
+     * first photo and its title. Slides without a usable photo are skipped.
      */
-    function buildPlaceRows(locations) {
-        var rows = [];
-        var currentCountry = null;
-        var currentState = null;
-
-        for (var i = 0; i < locations.length; i++) {
-            var loc = locations[i];
-            var country = loc.country || '';
-            var state = loc.state || '';
-
-            if (i === 0 || country !== currentCountry) {
-                if (i > 0) {
-                    rows.push({ type: 'spacer', text: '' });
-                }
-                if (country) {
-                    rows.push({ type: 'country', text: country });
-                }
-                currentCountry = country;
-                currentState = null;
-            }
-
-            if (state !== currentState) {
-                if (state) {
-                    rows.push({ type: 'state', text: state });
-                }
-                currentState = state;
-            }
-
-            if (loc.city) {
-                // Indented only when it sits under a state
-                rows.push({ type: state ? 'city-indent' : 'city', text: loc.city });
-            }
-        }
-        return rows;
-    }
-
-    /**
-     * How many rows starting at i must share a column: the header chain
-     * spacer > country > state > first city (at most 4), each header taking
-     * the row after it. A country or spacer followed by a spacer (or the end)
-     * stands alone, as does a state without an indented city. A chain taller
-     * than a whole column is never started; it ends up in "+ N more".
-     */
-    function headerChainLength(rows, i) {
-        var n = 0;
-        for (; i < rows.length; i++) {
-            var type = rows[i].type;
-            n++;
-            if (type === 'city' || type === 'city-indent') {
-                break;
-            }
-            if (type === 'state') {
-                if (i + 1 < rows.length && rows[i + 1].type === 'city-indent') {
-                    n++;
-                }
-                break;
-            }
-            // spacer or country: needs the next row, unless that starts a new country
-            if (i + 1 >= rows.length || rows[i + 1].type === 'spacer') {
-                break;
-            }
-        }
-        return n;
-    }
-
-    /**
-     * Fill two columns of up to cap rows each (the second has lastCap). A spacer
-     * never starts a column; a spacer, country or state never ends one when its
-     * first place follows (the whole header chain moves to the next column, see
-     * headerChainLength()). Returns {cols, next} (next = first row not placed).
-     */
-    function fillPlaceColumns(rows, cap, lastCap) {
-        var cols = [[], []];
-        var c = 0;
-        var i = 0;
-
-        while (i < rows.length && c < 2) {
-            var col = cols[c];
-            var limit = c === 0 ? cap : lastCap;
-            var row = rows[i];
-
-            if (row.type === 'spacer' && col.length === 0) {
-                i++;
+    function albumItems(monthSlide) {
+        var items = [];
+        var list = monthSlide.albums || [];
+        for (var i = 0; i < list.length; i++) {
+            var photo = (list[i].photos || [])[0];
+            var src = photo ? safeSrc(photo.src) : '';
+            if (!src) {
                 continue;
             }
-            var need = headerChainLength(rows, i);
-            if (col.length + need > limit) {
-                c++;
+            items.push({
+                title: list[i].title || '',
+                src: src,
+                srcXl: safeSrc(photo.src_xl) || src
+            });
+        }
+        return items;
+    }
+
+    /**
+     * Best grid for n album tiles in a W x H area: the column count that gives
+     * the largest tile (aspect kept between 1:1 and ALBUM_MAX_RATIO:1).
+     * Returns {cols, w, h}.
+     */
+    function bestAlbumLayout(n, W, H) {
+        var best = null;
+        for (var cols = 1; cols <= n; cols++) {
+            var rows = Math.ceil(n / cols);
+            var w = (W - (cols - 1) * ALBUM_GAP) / cols;
+            var h = (H - (rows - 1) * ALBUM_GAP) / rows;
+            if (w <= 0 || h <= 0) {
                 continue;
             }
-            col.push(row);
-            i++;
+            if (w / h < 1) {
+                h = w;
+            } else if (w / h > ALBUM_MAX_RATIO) {
+                w = h * ALBUM_MAX_RATIO;
+            }
+            if (best === null || w * h > best.w * best.h) {
+                best = { cols: cols, w: w, h: h };
+            }
         }
-        return { cols: cols, next: i };
+        if (best === null) {
+            return { cols: 1, w: 0, h: 0 };
+        }
+        return { cols: best.cols, w: Math.floor(best.w), h: Math.floor(best.h) };
     }
 
     /**
-     * Render the month place list into listEl (its height is already set)
+     * Month summary slide: month title, stats line, then the month's places as
+     * album tiles (one photo and a title each) filling the rest of the screen
      */
-    function renderPlaceList(listEl, locations) {
-        var rows = buildPlaceRows(locations);
-        var cap = Math.floor(listEl.clientHeight / LIST_ROW_HEIGHT);
-        if (rows.length === 0 || cap <= 0) {
-            listEl.innerHTML = '';
-            return;
-        }
-
-        var fill = fillPlaceColumns(rows, cap, cap);
-        var more = 0;
-        if (fill.next < rows.length) {
-            // Doesn't fit: keep the second column's last slot for "+ N more"
-            fill = fillPlaceColumns(rows, cap, cap - 1);
-            var hiddenCountries = 0;
-            for (var h = fill.next; h < rows.length; h++) {
-                if (rows[h].type === 'country') {
-                    hiddenCountries++;
-                } else if (rows[h].type !== 'spacer') {
-                    more++;
-                }
-            }
-            if (more === 0) {
-                more = hiddenCountries;
-            }
-        }
-
-        var html = '';
-        for (var c = 0; c < 2; c++) {
-            html += '<div class="place-col' + (c === 0 ? ' place-col-first' : '') + '">';
-            var col = fill.cols[c];
-            for (var r = 0; r < col.length; r++) {
-                html += '<div class="place-row place-' + col[r].type + '">' + escapeHtml(col[r].text) + '</div>';
-            }
-            if (c === 1 && more > 0) {
-                html += '<div class="place-row place-more">+ ' + escapeHtml(formatNumber(more)) + ' more</div>';
-            }
-            html += '</div>';
-        }
-        listEl.innerHTML = html;
-    }
-
-    /**
-     * Month summary slide: photo strip, title, stats line and place list
-     */
-    function renderMonthSummarySlide(monthData) {
+    function renderMonthSummarySlide(slide) {
+        var monthData = slide.data || {};
         setPhotoDisplay('');
         statDisplay.className = 'slide-month';
         statCover.style.backgroundImage = '';
 
-        var html = '';
-        var photos = monthData.photos || [];
-        var tiles = 0;
-        for (var i = 0; i < photos.length && i < 3; i++) {
-            var src = safeSrc(photos[i].src);
-            html += (tiles === 0 ? '<div class="month-strip">' : '') +
-                '<div class="month-tile"' + (src ? ' style="background-image: url(' + escapeHtml(src) + ')"' : '') + '></div>';
-            tiles++;
-        }
-        if (tiles > 0) {
-            html += '</div>';
-        }
-
-        html += '<div class="month-title"><span class="month-name">' + escapeHtml(monthData.month_name || '') +
+        var html = '<div class="month-title"><span class="month-name">' + escapeHtml(monthData.month_name || '') +
             '</span><span class="month-year">' + escapeHtml(selectedYear) + '</span></div>';
 
         var stats = summaryStats(monthData);
@@ -626,26 +524,52 @@
             parts.push(plural(stats[s].n, stats[s].one, stats[s].many));
         }
         html += '<div class="month-stats stat-label">' + escapeHtml(parts.join(DOT)) + '</div>';
-        html += '<div class="place-list"></div>';
+        html += '<div class="album-grid"></div>';
         statBody.innerHTML = html;
 
-        // Tile widths: three across the body width with two 6px gaps
-        var strip = statBody.firstChild;
-        if (tiles > 0 && strip.className === 'month-strip') {
-            var tileW = Math.floor((strip.clientWidth - 12) / 3);
-            var tileEls = strip.childNodes;
-            for (var t = 0; t < tileEls.length; t++) {
-                tileEls[t].style.width = tileW + 'px';
-            }
-        }
-
-        // The list takes the remaining height of the body
-        var listEl = statBody.lastChild;
+        // The grid takes the remaining height of the body
+        var gridEl = statBody.lastChild;
         var bodyStyle = window.getComputedStyle(statBody);
         var bottom = statBody.getBoundingClientRect().bottom - (parseFloat(bodyStyle.paddingBottom) || 0);
-        var listH = Math.floor(bottom - listEl.getBoundingClientRect().top);
-        listEl.style.height = Math.max(0, listH) + 'px';
-        renderPlaceList(listEl, monthData.locations || []);
+        var H = Math.max(0, Math.floor(bottom - gridEl.getBoundingClientRect().top));
+        var W = gridEl.clientWidth;
+
+        var items = albumItems(slide);
+        if (items.length === 0 || H <= 0 || W <= 0) {
+            return;
+        }
+
+        // Too many for the minimum tile size: show fewer, the rest as "+N more"
+        var shown = items.length;
+        var more = 0;
+        var layout = bestAlbumLayout(shown, W, H);
+        while (layout.w < ALBUM_MIN_W && shown > 1) {
+            shown--;
+            more = items.length - shown;
+            layout = bestAlbumLayout(shown + 1, W, H);
+        }
+
+        var count = shown + (more > 0 ? 1 : 0);
+        var rows = Math.ceil(count / layout.cols);
+        var useXl = Math.min(layout.w, layout.h) > ALBUM_XL_MIN_SHORT;
+        var out = '';
+        for (var i = 0; i < count; i++) {
+            var col = i % layout.cols;
+            var style = 'width: ' + layout.w + 'px; height: ' + layout.h + 'px; margin-right: ' +
+                (col === layout.cols - 1 ? 0 : ALBUM_GAP) + 'px; margin-bottom: ' + ALBUM_GAP + 'px';
+            if (i < shown) {
+                var item = items[i];
+                out += '<div class="album' + (layout.w >= 300 ? ' album-lg' : '') + '" style="' + style +
+                    '; background-image: url(' + escapeHtml(useXl ? item.srcXl : item.src) + ')">' +
+                    '<div class="album-caption"><div class="album-title">' + escapeHtml(item.title) + '</div></div></div>';
+            } else {
+                out += '<div class="album album-more" style="' + style + '"><div class="album-more-text">+ ' +
+                    escapeHtml(more) + ' more</div></div>';
+            }
+        }
+        gridEl.innerHTML = out;
+        gridEl.style.width = (layout.cols * layout.w + (layout.cols - 1) * ALBUM_GAP) + 'px';
+        gridEl.style.height = (rows * layout.h + (rows - 1) * ALBUM_GAP) + 'px';
     }
 
     /**
@@ -667,7 +591,7 @@
                 return;
             }
             if (slide.type === 'month-summary' && statDisplay.style.display !== 'none') {
-                renderMonthSummarySlide(slide.data);
+                renderMonthSummarySlide(slide);
             } else if (slide.type === 'location' && photoDisplay.style.display !== 'none' &&
                     slide.layoutKey !== gridKey()) {
                 // Only when the grid size changed. setPhotoDisplay() destroys the

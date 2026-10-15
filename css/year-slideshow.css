@@ -13,8 +13,6 @@
 
 body,
 .month-year,
-.place-city,
-.place-city-indent,
 .error-message p {
     font-family: "AvenirNext-Regular", "Avenir Next", "Helvetica Neue", Helvetica, Arial, sans-serif;
     font-weight: 400;
@@ -23,7 +21,6 @@ body,
 .year-title,
 .year-stat-num,
 .month-name,
-.place-state,
 #controls button,
 .loading-message p {
     font-family: "AvenirNext-Medium", "Avenir Next", "Helvetica Neue", Helvetica, Arial, sans-serif;
@@ -32,8 +29,6 @@ body,
 
 .eyebrow,
 .stat-label,
-.place-country,
-.place-more,
 .location-header h2,
 #counter,
 .error-message h2,
@@ -86,14 +81,14 @@ body {
     background-repeat: no-repeat;
 }
 
-/* Two layers: a left-side shade behind the text block, over a vertical
-   gradient that is dark (0.9 / 0.85) down to 45% and clear by 65%, so the
-   text at the top is always on dark */
+/* Two light layers so the cover photo stays visible: a left-side shade
+   behind the text block over a vertical gradient (0.5 at the top, clear by
+   45%). Legibility comes mostly from the text shadow below. */
 #stat-scrim {
-    background: -webkit-linear-gradient(left, rgba(11, 11, 12, 0.55) 0%, rgba(11, 11, 12, 0) 60%),
-        -webkit-linear-gradient(top, rgba(11, 11, 12, 0.9) 0%, rgba(11, 11, 12, 0.85) 45%, rgba(11, 11, 12, 0) 65%);
-    background: linear-gradient(to right, rgba(11, 11, 12, 0.55) 0%, rgba(11, 11, 12, 0) 60%),
-        linear-gradient(to bottom, rgba(11, 11, 12, 0.9) 0%, rgba(11, 11, 12, 0.85) 45%, rgba(11, 11, 12, 0) 65%);
+    background: -webkit-linear-gradient(left, rgba(11, 11, 12, 0.3) 0%, rgba(11, 11, 12, 0) 45%),
+        -webkit-linear-gradient(top, rgba(11, 11, 12, 0.5) 0%, rgba(11, 11, 12, 0.3) 25%, rgba(11, 11, 12, 0) 45%);
+    background: linear-gradient(to right, rgba(11, 11, 12, 0.3) 0%, rgba(11, 11, 12, 0) 45%),
+        linear-gradient(to bottom, rgba(11, 11, 12, 0.5) 0%, rgba(11, 11, 12, 0.3) 25%, rgba(11, 11, 12, 0) 45%);
 }
 
 #stat-display.slide-month #stat-cover,
@@ -126,7 +121,7 @@ body {
 #stat-display.slide-year .eyebrow,
 .year-title,
 .year-stats {
-    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.75), 0 0 16px rgba(0, 0, 0, 0.5);
 }
 
 /* No cover: a short accent rule above the eyebrow */
@@ -170,36 +165,17 @@ body {
 
 .year-stat .stat-label {
     margin-top: 6px;
+    color: rgba(243, 239, 232, 0.95);
+    text-shadow: 0 0 5px rgba(0, 0, 0, 0.9), 0 1px 2px rgba(0, 0, 0, 0.9);
 }
 
-/* Month summary: strip, title, stats line, place list (heights set in JS) */
+/* Month summary: title, stats line, album tiles (sizes set in JS) */
 #stat-display.slide-month #stat-body {
     top: 0;
     padding: 40px 48px 88px;
 }
 
-.month-strip {
-    overflow: hidden; /* clears the floated tiles */
-}
-
-.month-tile {
-    float: left;
-    width: 32.6%; /* replaced by an exact pixel width in JS */
-    height: 190px;
-    margin-right: 6px;
-    border-radius: 3px;
-    background-color: #161618;
-    background-size: cover;
-    background-position: center;
-    background-repeat: no-repeat;
-}
-
-.month-tile:last-child {
-    margin-right: 0;
-}
-
 .month-title {
-    margin-top: 28px;
     white-space: nowrap;
 }
 
@@ -218,59 +194,81 @@ body {
 
 .month-stats {
     margin-top: 10px;
-    line-height: 14px; /* with the fixed heights above: 13 list rows at 1024x768 */
+    line-height: 14px;
 }
 
-.place-list {
-    margin-top: 22px;
-    overflow: hidden;
+.album-grid {
+    margin: 22px auto 0;
+    overflow: hidden; /* clears the floated tiles */
 }
 
-.place-col {
+.album {
+    position: relative;
     float: left;
-    width: 48%;
-}
-
-.place-col-first {
-    margin-right: 4%;
-}
-
-/* Every row is exactly 24px (LIST_ROW_HEIGHT in js/year-slideshow.js) */
-.place-row {
-    display: block;
-    height: 24px;
-    line-height: 24px;
-    white-space: nowrap;
     overflow: hidden;
-    text-overflow: ellipsis;
+    border-radius: 3px;
+    background-color: #161618;
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
 }
 
-.place-country {
-    font-size: 12px;
-    text-transform: uppercase;
-    letter-spacing: 2.5px;
-    color: #e0a548;
+/* Title over a darkened bottom edge (a plain gradient, no blur) */
+.album-caption {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    padding: 24px 10px 8px;
+    background: -webkit-linear-gradient(top, rgba(11, 11, 12, 0) 0%, rgba(11, 11, 12, 0.85) 100%);
+    background: linear-gradient(to bottom, rgba(11, 11, 12, 0) 0%, rgba(11, 11, 12, 0.85) 100%);
 }
 
-.place-state {
-    font-size: 16px;
+/* The 2-line clamp sits on an inner element: with padding on the clamped box,
+   the next line shows through the padding */
+.album-title {
+    font-family: "AvenirNext-DemiBold", "Avenir Next", "Helvetica Neue", Helvetica, Arial, sans-serif;
+    font-weight: 600;
+    font-size: 13px;
+    line-height: 16px;
+    max-height: 32px;
     color: #f3efe8;
+    text-align: left;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
 }
 
-.place-city,
-.place-city-indent {
-    font-size: 16px;
-    color: rgba(243, 239, 232, 0.72);
+.album-lg .album-caption {
+    padding: 36px 16px 14px;
 }
 
-.place-city-indent {
-    padding-left: 14px;
+.album-lg .album-title {
+    font-size: 20px;
+    line-height: 24px;
+    max-height: 48px;
 }
 
-.place-more {
+.album-more {
+    border: 1px solid rgba(255, 255, 255, 0.10);
+    box-sizing: border-box;
+}
+
+.album-more-text {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 50%;
+    margin-top: -8px;
+    font-family: "AvenirNext-DemiBold", "Avenir Next", "Helvetica Neue", Helvetica, Arial, sans-serif;
+    font-weight: 600;
     font-size: 12px;
-    text-transform: uppercase;
+    line-height: 16px;
     letter-spacing: 2px;
+    text-transform: uppercase;
+    text-align: center;
     color: rgba(243, 239, 232, 0.50);
 }
 
@@ -542,10 +540,6 @@ body {
 
     #stat-display.slide-month #stat-body {
         padding: 40px 48px 96px;
-    }
-
-    .month-tile {
-        height: 180px;
     }
 
     .month-name {

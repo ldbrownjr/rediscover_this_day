@@ -157,7 +157,7 @@ Use this checklist to verify the application is working correctly.
 - [ ] Avenir Next shows three distinct weights (Regular, Medium, DemiBold); DemiBold is not a smeared synthetic bold
 - [ ] Picker: opened years show a cover photo with "N CITIES · N PHOTOS"; never-opened years show a plain tile with an amber rule; the page loads and scrolls with no reload (a reload means memory pressure)
 - [ ] Year summary: full-bleed cover with a smooth dark gradient, "A YEAR OF PLACES", the year and the stats row; with no cover, a dark slide with a short amber rule
-- [ ] Month summary: up to 3 photos in a strip, the month name and year, the stats line and a two-column place list (no dashes or bullets); a busy month ends with "+ N MORE"; rotating the iPad on a month slide re-fits the list
+- [ ] Month summary: the month name and year, the stats line and album tiles (one per place, a photo and its title) that fill the screen; a busy month ends with a "+ N more" tile; rotating the iPad on a month slide re-fits the tiles once
 - [ ] Location slide: single-line title (long titles end in "…"), "MONTH YEAR · N PHOTOS" under an amber rule
 - [ ] Merged places: January 2023 has "Klein area, Texas" with "· KLEIN · SPRING · BRIDGELAND" (then "+N" if the rest don't fit) after the photo count, and "Key West area, Florida"; June 2023 has "San Miguel de Cozumel area, Quintana Roo, Mexico" while Mahahual and Tulum stay separate; the sub-line stays one line in both orientations
 - [ ] Controls: ←, ‹, play/pause and › glyphs render; the 40px buttons are easy to tap; the counter reads "2 / 98" for 2023 (80 for 2019)
