@@ -87,12 +87,13 @@ body {
 }
 
 /* Two layers: a left-side shade behind the text block, over a vertical
-   gradient that is dark (0.85) from 55% down, so the text is always on dark */
+   gradient that is dark (0.9 / 0.85) down to 45% and clear by 65%, so the
+   text at the top is always on dark */
 #stat-scrim {
     background: -webkit-linear-gradient(left, rgba(11, 11, 12, 0.55) 0%, rgba(11, 11, 12, 0) 60%),
-        -webkit-linear-gradient(top, rgba(11, 11, 12, 0.45) 0%, rgba(11, 11, 12, 0) 16%, rgba(11, 11, 12, 0) 35%, rgba(11, 11, 12, 0.85) 55%, rgba(11, 11, 12, 0.94) 100%);
+        -webkit-linear-gradient(top, rgba(11, 11, 12, 0.9) 0%, rgba(11, 11, 12, 0.85) 45%, rgba(11, 11, 12, 0) 65%);
     background: linear-gradient(to right, rgba(11, 11, 12, 0.55) 0%, rgba(11, 11, 12, 0) 60%),
-        linear-gradient(to bottom, rgba(11, 11, 12, 0.45) 0%, rgba(11, 11, 12, 0) 16%, rgba(11, 11, 12, 0) 35%, rgba(11, 11, 12, 0.85) 55%, rgba(11, 11, 12, 0.94) 100%);
+        linear-gradient(to bottom, rgba(11, 11, 12, 0.9) 0%, rgba(11, 11, 12, 0.85) 45%, rgba(11, 11, 12, 0) 65%);
 }
 
 #stat-display.slide-month #stat-cover,
@@ -104,15 +105,17 @@ body {
 
 #stat-body {
     position: absolute;
+    top: 0;
     left: 0;
     right: 0;
     bottom: 0;
     text-align: left;
 }
 
-/* Year summary: full-bleed cover, text at the bottom left */
+/* Year summary: full-bleed cover, text at the top left (clear of the
+   translucent status bar) */
 #stat-display.slide-year #stat-body {
-    padding: 0 56px 104px;
+    padding: 56px 56px 0;
 }
 
 #stat-display.slide-year .eyebrow {
@@ -273,11 +276,17 @@ body {
 
 /* ---------- Location slide (#photo-display) ---------- */
 
+/* Header and grid start at the top (slideshow.css centres them), so short
+   grids don't float mid-screen */
 #photo-display {
     -webkit-box-orient: vertical;
     -webkit-box-direction: normal;
     -ms-flex-direction: column;
     flex-direction: column;
+    -webkit-box-pack: start;
+    -ms-flex-pack: start;
+    -webkit-justify-content: flex-start;
+    justify-content: flex-start;
     padding: 40px 48px 80px;
     overflow: hidden;
     -webkit-transition: opacity 0.3s ease-in-out;
@@ -487,7 +496,7 @@ body {
 
 @media (max-width: 800px) {
     #stat-display.slide-year #stat-body {
-        padding: 0 40px 112px;
+        padding: 56px 40px 0;
     }
 
     .year-title {
