@@ -143,6 +143,7 @@ Use this checklist to verify the application is working correctly.
 - [ ] "No photos for today" screen: the button is always visible and opens the year picker
 - [ ] With `year_review.enable_feature` off, neither button is shown
 - [ ] Apart from the button, This Day looks unchanged
+- [ ] The button (and the "No photos for today" one) is a small uppercase pill: Avenir Next DemiBold, dark translucent fill, thin border
 
 ## Year in Review Tests
 
@@ -152,8 +153,13 @@ Use this checklist to verify the application is working correctly.
 - [ ] A big year never opened before starts within seconds
 - [ ] Grid images are mostly ready when each location slide fades in
 - [ ] Every 9-photo grid fits on one screen with no scrollbar, in landscape and portrait (include a panorama and a slide of 16:9 photos)
-- [ ] Year and month summary boxes wrap legibly with space between rows
-- [ ] A failed tile shows as a blank rounded tile and the layout holds
+- [ ] Avenir Next shows three distinct weights (Regular, Medium, DemiBold); DemiBold is not a smeared synthetic bold
+- [ ] Picker: opened years show a cover photo with "N CITIES · N PHOTOS"; never-opened years show a plain tile with an amber rule; the page loads and scrolls with no reload (a reload means memory pressure)
+- [ ] Year summary: full-bleed cover with a smooth dark gradient, "A YEAR OF PLACES", the year and the stats row; with no cover, a dark slide with a short amber rule
+- [ ] Month summary: up to 3 photos in a strip, the month name and year, the stats line and a two-column place list (no dashes or bullets); a busy month ends with "+ N MORE"; rotating the iPad on a month slide re-fits the list
+- [ ] Location slide: single-line title (long titles end in "…"), "MONTH YEAR · N PHOTOS" under an amber rule
+- [ ] Controls: ←, ‹, play/pause and › glyphs render; the 40px buttons are easy to tap; the counter reads "2 / 163"
+- [ ] A failed tile shows as a blank dark tile and the layout holds
 - [ ] Back works during loading, on the error screen and on the slideshow
 - [ ] Turn on Airplane mode, open a year: "Unable to load photos" with Try Again; Try Again works once back online
 - [ ] A year with no photos shows "No photos from YYYY" with only a Back button
@@ -165,6 +171,8 @@ Use this checklist to verify the application is working correctly.
 
 - [ ] `api/year_photos.php?year=Y`: first call builds the list (seconds), the next is cached (`"cached": true`, well under 0.5s)
 - [ ] `api/year_thumb.php`: a miss returns a JPEG and creates `cache/year_review/{Y}_{id}_xl.jpg`; the next list call returns that file as a direct `src`
+- [ ] The list response has `year_summary.cover` `{id, w, h, src}` (src at size xl) and `months[].summary.photos` (up to 3, src at size m with `&size=m` or `_m.jpg`); an older-schema (1 or 2) list file is rebuilt on first open; portrait photos keep portrait `w`/`h` (compare with the real m thumbnail)
+- [ ] `size=m` for an allow-listed id returns 200 image/jpeg and creates `{Y}_{id}_m.jpg`; `size=xx`, `size=M` and `size[]=m` return 404; no `size` still serves xl
 - [ ] Bad input (`id=../x`, `id=1e3`, empty id, `id[]=1`, unknown id, years out of range) returns an empty 404 with no file written and no Synology call
 - [ ] 9 parallel misses with no `config/synology_session.php`: all 200, exactly one Synology login in the log (DEBUG)
 - [ ] Expired sid: write a junk sid (keep the guard line) with `created` more than 5 minutes ago: the next miss re-logs in once and returns 200; 9 parallel misses also cause exactly one login
@@ -186,7 +194,7 @@ Use this checklist to verify the application is working correctly.
 ### Cache Maintenance
 
 - [ ] `php cron/daily_refresh.php`: This Day output and exit code unchanged; the log has a "Year in Review cleanup: deleted N, kept N, failed N" line
-- [ ] Cleanup deletes unreferenced thumbnails older than an hour and stale `.*.tmp`; keeps referenced ones, recent ones, and all thumbnails of a year whose list file is corrupt (WARNING); never touches `.gitignore`, `.htaccess` or `*.cache.php`
+- [ ] Cleanup deletes unreferenced thumbnails (any size) older than an hour and stale `.*.tmp`; keeps referenced ones at every size (xl and m), recent ones, and all thumbnails of a year whose list file is corrupt (WARNING); never touches `.gitignore`, `.htaccess` or `*.cache.php`
 - [ ] Admin "Clear Year in Review cache" deletes lists, thumbnails and `config/synology_session.php`, keeps the dotfiles; it is rejected without a CSRF token
 - [ ] Enter in an admin text field does not trigger the Clear button
 

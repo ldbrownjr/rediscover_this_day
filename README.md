@@ -166,6 +166,12 @@ Controls appear when you move the mouse or touch the screen and auto-hide after 
 - **Next** (`>` button or Right Arrow): Go to next photo
 - **Counter**: Shows current position (e.g., "5 of 23")
 
+### Year in Review
+
+Tap **Year in Review** on the slideshow (or open `year-review.php`) to pick a year. Years you have opened before show a cover photo with their city and photo counts; years never opened show a plain tile. A year plays as a full-screen cover with the year's totals, then for each month a photo strip with the places visited, followed by a photo grid per place.
+
+The first open of a year builds its slide list from Synology (this can take up to a couple of minutes for a big year); after that it is cached in `cache/year_review/`. The API (`api/year_photos.php?year=YYYY`) returns `year_summary.cover` (the year's cover photo) and `months[].summary.photos` (up to 3 photos per month), each with a `src`. Thumbnails are fetched on demand by `api/year_thumb.php`: size `xl` for the cover and grids, size `m` (`&size=m`) for the month strips and the year picker tiles.
+
 ### Admin Functions
 
 From the admin interface (`/admin/`), you can:
