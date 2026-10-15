@@ -1,50 +1,340 @@
 /*
- * Year in Review slideshow styles ("Places Explored" view).
- * Loaded AFTER css/slideshow.css, on year-slideshow.php only.
- * Rules here override/extend the shared slideshow styles.
+ * Year in Review slideshow styles (editorial "Places Explored" view).
+ * Loaded AFTER css/slideshow.css, on year-slideshow.php only: rules here
+ * override the shared slideshow styles by load order (same specificity).
+ *
+ * Palette: background #0b0b0c, raised #161618, hairline rgba(255,255,255,0.10),
+ * text #f3efe8 / 0.72 / 0.50 / 0.32, accent (amber) #e0a548.
+ * Fonts: Avenir Next Regular / Medium / DemiBold only (iOS 9 has no Light).
+ * No flex `gap` (iOS 9 ignores it): spacing is margins only.
  */
+
+/* ---------- Fonts (one block per weight) ---------- */
+
+body,
+.month-year,
+.place-city,
+.place-city-indent,
+.error-message p {
+    font-family: "AvenirNext-Regular", "Avenir Next", "Helvetica Neue", Helvetica, Arial, sans-serif;
+    font-weight: 400;
+}
+
+.year-title,
+.year-stat-num,
+.month-name,
+.place-state,
+#controls button,
+.loading-message p {
+    font-family: "AvenirNext-Medium", "Avenir Next", "Helvetica Neue", Helvetica, Arial, sans-serif;
+    font-weight: 500;
+}
+
+.eyebrow,
+.stat-label,
+.place-country,
+.place-more,
+.location-header h2,
+#counter,
+.error-message h2,
+.loading-message .btn,
+.error-message .btn {
+    font-family: "AvenirNext-DemiBold", "Avenir Next", "Helvetica Neue", Helvetica, Arial, sans-serif;
+    font-weight: 600;
+}
+
+body {
+    background-color: #0b0b0c;
+    color: #f3efe8;
+}
+
+/* ---------- Shared building blocks ---------- */
+
+.eyebrow {
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 3px;
+    color: #e0a548;
+}
+
+.stat-label {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    color: rgba(243, 239, 232, 0.50);
+}
+
+/* ---------- Year and month summary slides (#stat-display) ---------- */
+
+#stat-display {
+    background: #0b0b0c;
+    overflow: hidden;
+}
+
+#stat-cover,
+#stat-scrim {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    left: 0;
+}
+
+#stat-cover {
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+}
+
+/* Two layers: a left-side shade behind the text block, over a vertical
+   gradient that is dark (0.85) from 55% down, so the text is always on dark */
+#stat-scrim {
+    background: -webkit-linear-gradient(left, rgba(11, 11, 12, 0.55) 0%, rgba(11, 11, 12, 0) 60%),
+        -webkit-linear-gradient(top, rgba(11, 11, 12, 0.45) 0%, rgba(11, 11, 12, 0) 16%, rgba(11, 11, 12, 0) 35%, rgba(11, 11, 12, 0.85) 55%, rgba(11, 11, 12, 0.94) 100%);
+    background: linear-gradient(to right, rgba(11, 11, 12, 0.55) 0%, rgba(11, 11, 12, 0) 60%),
+        linear-gradient(to bottom, rgba(11, 11, 12, 0.45) 0%, rgba(11, 11, 12, 0) 16%, rgba(11, 11, 12, 0) 35%, rgba(11, 11, 12, 0.85) 55%, rgba(11, 11, 12, 0.94) 100%);
+}
+
+#stat-display.slide-month #stat-cover,
+#stat-display.slide-month #stat-scrim,
+#stat-display.no-cover #stat-cover,
+#stat-display.no-cover #stat-scrim {
+    display: none;
+}
+
+#stat-body {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    text-align: left;
+}
+
+/* Year summary: full-bleed cover, text at the bottom left */
+#stat-display.slide-year #stat-body {
+    padding: 0 56px 104px;
+}
+
+#stat-display.slide-year .eyebrow {
+    margin-bottom: 6px;
+}
+
+/* Static shadow for legibility over the cover */
+#stat-display.slide-year .eyebrow,
+.year-title,
+.year-stats {
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+}
+
+/* No cover: a short accent rule above the eyebrow */
+.accent-rule {
+    display: block;
+    width: 48px;
+    height: 2px;
+    margin-bottom: 16px;
+    background: #e0a548;
+}
+
+.year-title {
+    font-size: 168px;
+    letter-spacing: -4px;
+    line-height: 0.9;
+    color: #f3efe8;
+}
+
+.year-stats {
+    margin-top: 28px;
+    white-space: nowrap;
+}
+
+.year-stat {
+    display: inline-block;
+    vertical-align: top;
+    padding: 0 28px;
+    border-left: 1px solid rgba(243, 239, 232, 0.2);
+}
+
+.year-stat:first-child {
+    border-left: none;
+    padding-left: 0;
+}
+
+.year-stat-num {
+    font-size: 40px;
+    line-height: 1;
+    color: #f3efe8;
+}
+
+.year-stat .stat-label {
+    margin-top: 6px;
+}
+
+/* Month summary: strip, title, stats line, place list (heights set in JS) */
+#stat-display.slide-month #stat-body {
+    top: 0;
+    padding: 40px 48px 88px;
+}
+
+.month-strip {
+    overflow: hidden; /* clears the floated tiles */
+}
+
+.month-tile {
+    float: left;
+    width: 32.6%; /* replaced by an exact pixel width in JS */
+    height: 190px;
+    margin-right: 6px;
+    border-radius: 3px;
+    background-color: #161618;
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+}
+
+.month-tile:last-child {
+    margin-right: 0;
+}
+
+.month-title {
+    margin-top: 28px;
+    white-space: nowrap;
+}
+
+.month-name {
+    font-size: 64px;
+    letter-spacing: -1.5px;
+    line-height: 1;
+    color: #f3efe8;
+}
+
+.month-year {
+    margin-left: 12px;
+    font-size: 22px;
+    color: rgba(243, 239, 232, 0.50);
+}
+
+.month-stats {
+    margin-top: 10px;
+    line-height: 14px; /* with the fixed heights above: 13 list rows at 1024x768 */
+}
+
+.place-list {
+    margin-top: 22px;
+    overflow: hidden;
+}
+
+.place-col {
+    float: left;
+    width: 48%;
+}
+
+.place-col-first {
+    margin-right: 4%;
+}
+
+/* Every row is exactly 24px (LIST_ROW_HEIGHT in js/year-slideshow.js) */
+.place-row {
+    display: block;
+    height: 24px;
+    line-height: 24px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.place-country {
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 2.5px;
+    color: #e0a548;
+}
+
+.place-state {
+    font-size: 16px;
+    color: #f3efe8;
+}
+
+.place-city,
+.place-city-indent {
+    font-size: 16px;
+    color: rgba(243, 239, 232, 0.72);
+}
+
+.place-city-indent {
+    padding-left: 14px;
+}
+
+.place-more {
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    color: rgba(243, 239, 232, 0.50);
+}
+
+/* ---------- Location slide (#photo-display) ---------- */
 
 #photo-display {
     -webkit-box-orient: vertical;
     -webkit-box-direction: normal;
     -ms-flex-direction: column;
     flex-direction: column;
-    padding: 50px 20px 90px 20px;
+    padding: 40px 48px 80px;
     overflow: hidden;
     -webkit-transition: opacity 0.3s ease-in-out;
     transition: opacity 0.3s ease-in-out;
 }
 
 .location-header {
-    text-align: center;
-    margin-bottom: 10px;
+    -webkit-align-self: stretch;
+    -ms-flex-item-align: stretch;
+    align-self: stretch;
+    -webkit-flex-shrink: 0;
     flex-shrink: 0;
+    height: 62px;
+    margin-bottom: 16px;
+    text-align: left;
 }
 
 .location-header h2 {
-    font-size: 26px;
-    margin-bottom: 5px;
-    font-weight: 300;
+    margin: 0;
+    font-size: 30px;
+    letter-spacing: -0.5px;
+    line-height: 36px;
+    color: #f3efe8;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
-.location-header p {
-    font-size: 14px;
-    opacity: 0.7;
+.location-sub {
+    margin-top: 8px;
+    height: 18px;
+    line-height: 18px;
+    white-space: nowrap;
+    overflow: hidden;
 }
 
+.location-sub .rule {
+    display: inline-block;
+    width: 28px;
+    height: 2px;
+    margin-right: 12px;
+    vertical-align: middle;
+    background: #e0a548;
+}
+
+/* Takes the remaining height of #photo-display (no max-height) */
 .photo-grid {
     width: 100%;
     max-width: 1800px;
     padding: 5px;
     overflow-y: auto;
-    max-height: calc(100vh - 150px);
-    min-height: 400px;
 }
 
 .photo-grid > div {
     display: block;
     overflow: hidden;
-    border-radius: 16px;
+    border-radius: 3px;
 }
 
 .photo-grid img {
@@ -53,93 +343,174 @@
     height: auto;
 }
 
-/* A thumbnail that failed to load: blank rounded tile, layout unchanged */
+/* A thumbnail that failed to load: blank tile, layout unchanged */
 .photo-grid > div.thumb-missing {
-    background: rgba(255, 255, 255, 0.08);
+    background: #161618;
 }
 
 .thumb-missing img {
     visibility: hidden;
 }
 
-.summary-stats {
-    display: -webkit-box;
-    display: -ms-flexbox;
-    display: flex;
-    -webkit-box-pack: center;
-    -ms-flex-pack: center;
-    justify-content: center;
-    -webkit-flex-wrap: wrap;
-    -ms-flex-wrap: wrap;
-    flex-wrap: wrap;
-    margin-bottom: 40px;
-    font-size: 24px;
+/* ---------- Controls ---------- */
+
+#controls {
+    gap: 0; /* iOS 9 ignores the shared gap; match it on desktop too */
+    bottom: 24px;
+    padding: 6px 14px;
+    background: rgba(11, 11, 12, 0.72);
+    border: 1px solid rgba(255, 255, 255, 0.10);
+    border-radius: 26px;
 }
 
-.summary-stats div {
-    margin: 10px 20px;
-    padding: 15px 30px;
-    background: rgba(255, 255, 255, 0.1);
-    border-radius: 8px;
-}
-
-.hierarchy-list {
-    max-width: 800px;
-    max-height: 60vh;
-    margin: 0 auto;
-    text-align: left;
-    overflow-y: auto;
-    padding-right: 10px;
-}
-
-.country-group {
-    margin-bottom: 30px;
-}
-
-.country-name {
-    font-size: 28px;
-    font-weight: bold;
-    margin-bottom: 10px;
-}
-
-.state-name {
-    font-size: 20px;
-    margin-left: 20px;
-    margin-bottom: 5px;
-    opacity: 0.9;
-}
-
-.city-name {
-    font-size: 16px;
-    margin-left: 40px;
-    margin-bottom: 3px;
-    opacity: 0.8;
-}
-
-/* Only surviving property from the old duplicate stat block (not set by slideshow.css) */
-.stat-detail {
-    opacity: 0.7;
-}
-
-/* Loading / error screen buttons (<button class="btn">) */
-button.btn {
+#controls button {
     -webkit-appearance: none;
-    font-family: inherit;
+    width: 40px;
+    height: 40px;
+    margin-right: 4px;
+    padding: 0;
+    background: transparent;
+    border: 0;
+    border-radius: 50%;
+    color: rgba(243, 239, 232, 0.72);
+    font-size: 18px;
+}
+
+#controls button:hover {
+    background: rgba(255, 255, 255, 0.08);
+}
+
+#controls button:active {
+    background: rgba(255, 255, 255, 0.12);
+    -webkit-transform: none;
+    transform: none;
+}
+
+#controls #back-btn {
+    margin-right: 10px;
+    padding-right: 6px;
+    border-right: 1px solid rgba(255, 255, 255, 0.10);
+    border-radius: 0;
+}
+
+#counter {
+    margin-left: 10px;
+    font-size: 12px;
+    letter-spacing: 1.5px;
+    color: rgba(243, 239, 232, 0.50);
+}
+
+/* ---------- Loading, error, empty and turned-off screens ---------- */
+
+#loading-screen,
+#error-screen {
+    background: #0b0b0c;
+}
+
+.loading-message .eyebrow {
+    margin-bottom: 22px;
+}
+
+.loading-spinner {
+    width: 28px;
+    height: 28px;
+    margin: 0 auto 18px;
+    border: 2px solid rgba(255, 255, 255, 0.15);
+    border-top-color: #e0a548;
+}
+
+.loading-message p {
+    font-size: 15px;
+    color: rgba(243, 239, 232, 0.72);
+}
+
+.error-message h2 {
+    margin-bottom: 10px;
+    font-size: 28px;
+    color: #f3efe8;
+}
+
+.error-message p {
+    margin-bottom: 24px;
+    font-size: 16px;
+    color: rgba(243, 239, 232, 0.72);
+}
+
+/* Ghost pill buttons (two classes, to beat slideshow.css's .error-message .btn) */
+.loading-message .btn,
+.error-message .btn {
+    -webkit-appearance: none;
+    display: inline-block;
+    padding: 10px 22px;
+    background: transparent;
+    border: 1px solid rgba(243, 239, 232, 0.3);
+    border-radius: 20px;
+    color: #f3efe8;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
     cursor: pointer;
 }
 
-.loading-message .btn {
-    display: inline-block;
-    margin-top: 20px;
-    padding: 12px 24px;
-    background: rgba(255, 255, 255, 0.2);
-    border: 2px solid rgba(255, 255, 255, 0.4);
-    color: #fff;
-    border-radius: 5px;
-    font-size: 16px;
-    font-weight: 600;
+.loading-message .btn:hover,
+.error-message .btn:hover {
+    background: transparent;
+    border-color: rgba(243, 239, 232, 0.3);
 }
 
-.error-message .btn + .btn {
+.loading-message .btn:active,
+.error-message .btn:active {
+    background: rgba(255, 255, 255, 0.10);
+}
+
+.error-message .btn-primary,
+.error-message .btn-primary:hover {
+    background: #e0a548;
+    border-color: #e0a548;
+    color: #0b0b0c;
+}
+
+.error-message .btn-primary:active {
+    background: #e0a548;
+    opacity: 0.85;
+}
+
+.btn + .btn {
     margin-left: 10px;
+}
+
+.loading-message .btn {
+    margin-top: 26px;
+}
+
+/* ---------- Portrait (768x1024) ---------- */
+
+@media (max-width: 800px) {
+    #stat-display.slide-year #stat-body {
+        padding: 0 40px 112px;
+    }
+
+    .year-title {
+        font-size: 136px;
+    }
+
+    .year-stat {
+        padding: 0 20px;
+    }
+
+    .year-stat-num {
+        font-size: 34px;
+    }
+
+    #stat-display.slide-month #stat-body {
+        padding: 40px 48px 96px;
+    }
+
+    .month-tile {
+        height: 180px;
+    }
+
+    .month-name {
+        font-size: 72px;
+    }
 }

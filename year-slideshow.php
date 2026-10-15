@@ -43,8 +43,9 @@ if ($year < $firstYear || $year > $currentYear) {
     <div id="slideshow-container">
         <div id="loading-screen">
             <div class="loading-message">
+                <div class="eyebrow">Year in Review</div>
                 <div class="loading-spinner"></div>
-                <p id="loading-text">Loading <?php echo h($year); ?> highlights...</p>
+                <p id="loading-text">Loading <?php echo h($year); ?>&hellip;</p>
                 <button id="loading-back-btn" class="btn">Back to Years</button>
             </div>
         </div>
@@ -52,18 +53,16 @@ if ($year < $firstYear || $year > $currentYear) {
         <div id="photo-display" style="display: none;"></div>
 
         <div id="stat-display" style="display: none;">
-            <div class="stat-content">
-                <h2 class="stat-title"></h2>
-                <p class="stat-value"></p>
-                <p class="stat-detail"></p>
-            </div>
+            <div id="stat-cover"></div>
+            <div id="stat-scrim"></div>
+            <div id="stat-body"></div>
         </div>
 
         <div id="controls">
             <button id="back-btn" title="Back to Year Selection">&larr;</button>
-            <button id="prev-btn" title="Previous">&lt;</button>
+            <button id="prev-btn" title="Previous">&lsaquo;</button>
             <button id="play-pause-btn" title="Pause">&#10074;&#10074;</button>
-            <button id="next-btn" title="Next">&gt;</button>
+            <button id="next-btn" title="Next">&rsaquo;</button>
             <span id="counter"></span>
         </div>
 
@@ -72,7 +71,7 @@ if ($year < $firstYear || $year > $currentYear) {
                 <h2 id="error-title">Unable to load photos</h2>
                 <p id="error-text">Please check your connection and try again.</p>
                 <button id="error-back-btn" class="btn">Back to Years</button>
-                <button id="error-retry-btn" class="btn">Try Again</button>
+                <button id="error-retry-btn" class="btn btn-primary">Try Again</button>
             </div>
         </div>
     </div>

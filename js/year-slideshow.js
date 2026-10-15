@@ -13,9 +13,9 @@
     var errorRetryBtn = document.getElementById('error-retry-btn');
     var photoDisplay = document.getElementById('photo-display');
     var statDisplay = document.getElementById('stat-display');
-    var statTitle = document.querySelector('.stat-title');
-    var statValue = document.querySelector('.stat-value');
-    var statDetail = document.querySelector('.stat-detail');
+    var statCover = document.getElementById('stat-cover');
+    var statScrim = document.getElementById('stat-scrim');
+    var statBody = document.getElementById('stat-body');
     var counter = document.getElementById('counter');
     var controls = document.getElementById('controls');
     var backBtn = document.getElementById('back-btn');
@@ -34,7 +34,11 @@
     var activeXhr = null;
     var preloaded = [];
     var preloadedIndex = -1;
+    var coverImage = null;
+    var resizeTimer = null;
     var GRID_FIT_RETRIES = 3; // smaller re-layouts of a grid that doesn't fit
+    var LIST_ROW_HEIGHT = 24; // px, every month place-list row (see year-slideshow.css)
+    var DOT = ' \u00b7 ';
 
     // Config
     var duration = (config.duration || 5) * 1000;
@@ -49,6 +53,53 @@
             .replace(/>/g, '&gt;')
             .replace(/"/g, '&quot;')
             .replace(/'/g, '&#39;');
+    }
+
+    /**
+     * 1234567 -> "1,234,567" (no toLocaleString: it varies by browser)
+     */
+    function formatNumber(n) {
+        return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+    }
+
+    /**
+     * "1 City" / "5 Cities"
+     */
+    function plural(n, one, many) {
+        return formatNumber(n) + ' ' + (n === 1 ? one : many);
+    }
+
+    /**
+     * An image URL from the API, or '' unless it is one of the two forms
+     * yearThumbSrc() (api/year_review_lib.php) builds: the cached file or the
+     * on-demand endpoint. Keep in sync with isYearThumbSrc() there.
+     */
+    var SAFE_SRC = /^(cache\/year_review\/\d{4}_\d+_(xl|m)\.jpg|api\/year_thumb\.php\?year=\d{4}&id=\d+(&size=(xl|m))?)$/;
+    function safeSrc(s) {
+        s = String(s || '');
+        return SAFE_SRC.test(s) ? s : '';
+    }
+
+    /**
+     * The summary stats as [{n, label}]: countries, states, cities, photos.
+     * Zero values are omitted, except photos.
+     */
+    function summaryStats(data) {
+        var defs = [
+            ['countries', 'Country', 'Countries'],
+            ['states', 'State', 'States'],
+            ['cities', 'City', 'Cities'],
+            ['total_photos', 'Photo', 'Photos']
+        ];
+        var stats = [];
+        for (var i = 0; i < defs.length; i++) {
+            var n = parseInt(data[defs[i][0]], 10) || 0;
+            if (n === 0 && defs[i][0] !== 'total_photos') {
+                continue;
+            }
+            stats.push({ n: n, one: defs[i][1], many: defs[i][2] });
+        }
+        return stats;
     }
 
     /**
@@ -101,6 +152,7 @@
         document.addEventListener('mousemove', showControls);
         document.addEventListener('touchstart', showControls);
         document.addEventListener('keydown', handleKeyPress);
+        window.addEventListener('resize', handleResize);
     }
 
     /**
@@ -163,6 +215,11 @@
                     return;
                 }
                 summary = response.year_summary || {};
+                // Start fetching the year cover now; don't wait for it
+                if (summary.cover && safeSrc(summary.cover.src)) {
+                    coverImage = new Image();
+                    coverImage.src = safeSrc(summary.cover.src);
+                }
                 buildSlideshow(response.months);
                 loadingScreen.style.display = 'none';
                 controls.style.display = 'flex';
@@ -198,6 +255,8 @@
 
             var locationSlides = month.location_slides || [];
             for (var j = 0; j < locationSlides.length; j++) {
+                // The month name for the location header ("January 2023 · 9 photos")
+                locationSlides[j].monthName = (month.summary || {}).month_name;
                 slides.push({ type: 'location', data: locationSlides[j] });
             }
         }
@@ -231,6 +290,15 @@
     }
 
     /**
+     * The only way to replace #photo-display's content: destroys the grid first,
+     * so its checkWidth interval can't outlive it
+     */
+    function setPhotoDisplay(html) {
+        destroyGallery();
+        photoDisplay.innerHTML = html;
+    }
+
+    /**
      * Display slide at given index. The ONLY function that changes the display.
      */
     function showSlide(index) {
@@ -241,7 +309,7 @@
         clearTimeout(fadeTimer);
 
         currentIndex = index;
-        counter.textContent = (currentIndex + 1) + ' of ' + slides.length;
+        counter.textContent = (currentIndex + 1) + ' / ' + slides.length;
 
         var slide = slides[index];
         var target;
@@ -258,14 +326,21 @@
         target.style.opacity = '0';
 
         fadeTimer = setTimeout(function() {
+            // No fade pending from here on (handleResize checks this)
+            fadeTimer = null;
             if (index !== currentIndex) {
                 return;
             }
 
-            // Tear down the old grid only now (after the fade-out), so it doesn't
+            // The old grid is torn down only now (after the fade-out, by
+            // setPhotoDisplay() in the render functions below), so it doesn't
             // collapse while still fading. With quick taps, earlier callbacks were
-            // cleared, so this surviving one destroys whatever grid is in place.
-            destroyGallery();
+            // cleared, so this surviving one replaces whatever grid is in place.
+
+            // Release the decoded year cover as soon as another slide is shown
+            if (slide.type !== 'year-summary') {
+                statCover.style.backgroundImage = '';
+            }
 
             if (slide.type === 'year-summary') {
                 renderYearSummarySlide();
@@ -282,14 +357,21 @@
     }
 
     /**
-     * Preload the photos of the next location slide (one slide only)
+     * Preload the photos of the next location slide (one slide only), plus the
+     * strip photos of a month summary on the way there
      */
     function preloadNext(index) {
         var images = [];
+        var monthSlide = null;
+        var i;
 
         for (var step = 1; step < slides.length; step++) {
             var target = (index + step) % slides.length;
             var slide = slides[target];
+            if (slide.type === 'month-summary' && monthSlide === null) {
+                monthSlide = slide;
+                continue;
+            }
             if (slide.type !== 'location') {
                 continue;
             }
@@ -298,10 +380,18 @@
                 return;
             }
             preloadedIndex = target;
+            var monthPhotos = monthSlide ? (monthSlide.data.photos || []) : [];
+            for (i = 0; i < monthPhotos.length && i < 3; i++) {
+                if (safeSrc(monthPhotos[i].src)) {
+                    var mImg = new Image();
+                    mImg.src = safeSrc(monthPhotos[i].src);
+                    images.push(mImg);
+                }
+            }
             var photos = slide.data.photos || [];
-            for (var i = 0; i < photos.length && i < 9; i++) {
+            for (i = 0; i < photos.length && i < 9; i++) {
                 var img = new Image();
-                img.src = photos[i].src;
+                img.src = safeSrc(photos[i].src);
                 images.push(img);
             }
             break;
@@ -312,84 +402,252 @@
     }
 
     /**
-     * Summary counts block
-     */
-    function summaryStatsHtml(data) {
-        var html = '<div class="summary-stats">';
-        html += '<div>' + escapeHtml(String(data.countries || 0)) + ' Countries</div>';
-        html += '<div>' + escapeHtml(String(data.states || 0)) + ' States</div>';
-        html += '<div>' + escapeHtml(String(data.cities || 0)) + ' Cities</div>';
-        html += '<div>' + escapeHtml(String(data.total_photos || 0)) + ' Photos</div>';
-        html += '</div>';
-        return html;
-    }
-
-    /**
-     * Year summary slide
+     * Year summary slide: full-bleed cover, year and stats
      */
     function renderYearSummarySlide() {
-        photoDisplay.innerHTML = '';
-        statTitle.textContent = selectedYear + ' - Places Explored';
-        statValue.innerHTML = summaryStatsHtml(summary || {});
-        statDetail.textContent = 'Organized by month and location';
+        setPhotoDisplay('');
+        var data = summary || {};
+        var src = data.cover ? safeSrc(data.cover.src) : '';
+
+        statDisplay.className = src ? 'slide-year' : 'slide-year no-cover';
+        statCover.style.backgroundImage = src ? 'url(' + src + ')' : '';
+
+        var html = '';
+        if (!src) {
+            html += '<span class="accent-rule"></span>';
+        }
+        html += '<div class="eyebrow">A Year of Places</div>';
+        html += '<div class="year-title">' + escapeHtml(selectedYear) + '</div>';
+        html += '<div class="year-stats">';
+        var stats = summaryStats(data);
+        for (var i = 0; i < stats.length; i++) {
+            html += '<div class="year-stat">';
+            html += '<div class="year-stat-num">' + escapeHtml(formatNumber(stats[i].n)) + '</div>';
+            html += '<div class="stat-label">' + escapeHtml(stats[i].n === 1 ? stats[i].one : stats[i].many) + '</div>';
+            html += '</div>';
+        }
+        html += '</div>';
+        statBody.innerHTML = html;
+
+        // The element now holds the cover; drop the preload so leaving this
+        // slide (which clears backgroundImage) can release the decoded image.
+        coverImage = null;
     }
 
     /**
-     * Month summary slide (countries > states > cities; missing parts omitted)
+     * Month place list as rows: country > state > city, missing parts omitted,
+     * a spacer between countries. Each row is {type, text}.
      */
-    function renderMonthSummarySlide(monthData) {
-        photoDisplay.innerHTML = '';
-        statTitle.textContent = monthData.month_name + ' ' + selectedYear;
+    function buildPlaceRows(locations) {
+        var rows = [];
+        var currentCountry = null;
+        var currentState = null;
 
-        var html = summaryStatsHtml(monthData);
-        var locations = monthData.locations || [];
+        for (var i = 0; i < locations.length; i++) {
+            var loc = locations[i];
+            var country = loc.country || '';
+            var state = loc.state || '';
 
-        if (locations.length > 0) {
-            html += '<div class="hierarchy-list">';
-            var groupOpen = false;
-            var currentCountry = null;
-            var currentState = null;
-
-            for (var i = 0; i < locations.length; i++) {
-                var loc = locations[i];
-                var country = loc.country || '';
-                var state = loc.state || '';
-
-                // New country group
-                if (!groupOpen || country !== currentCountry) {
-                    if (groupOpen) {
-                        html += '</div>';
-                    }
-                    html += '<div class="country-group">';
-                    groupOpen = true;
-                    if (country) {
-                        html += '<div class="country-name">' + escapeHtml(country) + '</div>';
-                    }
-                    currentCountry = country;
-                    currentState = null;
+            if (i === 0 || country !== currentCountry) {
+                if (i > 0) {
+                    rows.push({ type: 'spacer', text: '' });
                 }
-
-                // New state within the country
-                if (state !== currentState) {
-                    if (state) {
-                        html += '<div class="state-name">- ' + escapeHtml(state) + '</div>';
-                    }
-                    currentState = state;
+                if (country) {
+                    rows.push({ type: 'country', text: country });
                 }
-
-                if (loc.city) {
-                    html += '<div class="city-name">  • ' + escapeHtml(loc.city) + '</div>';
-                }
+                currentCountry = country;
+                currentState = null;
             }
 
-            if (groupOpen) {
-                html += '</div>';
+            if (state !== currentState) {
+                if (state) {
+                    rows.push({ type: 'state', text: state });
+                }
+                currentState = state;
+            }
+
+            if (loc.city) {
+                // Indented only when it sits under a state
+                rows.push({ type: state ? 'city-indent' : 'city', text: loc.city });
+            }
+        }
+        return rows;
+    }
+
+    /**
+     * How many rows starting at i must share a column: the header chain
+     * spacer > country > state > first city (at most 4), each header taking
+     * the row after it. A country or spacer followed by a spacer (or the end)
+     * stands alone, as does a state without an indented city. A chain taller
+     * than a whole column is never started; it ends up in "+ N more".
+     */
+    function headerChainLength(rows, i) {
+        var n = 0;
+        for (; i < rows.length; i++) {
+            var type = rows[i].type;
+            n++;
+            if (type === 'city' || type === 'city-indent') {
+                break;
+            }
+            if (type === 'state') {
+                if (i + 1 < rows.length && rows[i + 1].type === 'city-indent') {
+                    n++;
+                }
+                break;
+            }
+            // spacer or country: needs the next row, unless that starts a new country
+            if (i + 1 >= rows.length || rows[i + 1].type === 'spacer') {
+                break;
+            }
+        }
+        return n;
+    }
+
+    /**
+     * Fill two columns of up to cap rows each (the second has lastCap). A spacer
+     * never starts a column; a spacer, country or state never ends one when its
+     * first place follows (the whole header chain moves to the next column, see
+     * headerChainLength()). Returns {cols, next} (next = first row not placed).
+     */
+    function fillPlaceColumns(rows, cap, lastCap) {
+        var cols = [[], []];
+        var c = 0;
+        var i = 0;
+
+        while (i < rows.length && c < 2) {
+            var col = cols[c];
+            var limit = c === 0 ? cap : lastCap;
+            var row = rows[i];
+
+            if (row.type === 'spacer' && col.length === 0) {
+                i++;
+                continue;
+            }
+            var need = headerChainLength(rows, i);
+            if (col.length + need > limit) {
+                c++;
+                continue;
+            }
+            col.push(row);
+            i++;
+        }
+        return { cols: cols, next: i };
+    }
+
+    /**
+     * Render the month place list into listEl (its height is already set)
+     */
+    function renderPlaceList(listEl, locations) {
+        var rows = buildPlaceRows(locations);
+        var cap = Math.floor(listEl.clientHeight / LIST_ROW_HEIGHT);
+        if (rows.length === 0 || cap <= 0) {
+            listEl.innerHTML = '';
+            return;
+        }
+
+        var fill = fillPlaceColumns(rows, cap, cap);
+        var more = 0;
+        if (fill.next < rows.length) {
+            // Doesn't fit: keep the second column's last slot for "+ N more"
+            fill = fillPlaceColumns(rows, cap, cap - 1);
+            var hiddenCountries = 0;
+            for (var h = fill.next; h < rows.length; h++) {
+                if (rows[h].type === 'country') {
+                    hiddenCountries++;
+                } else if (rows[h].type !== 'spacer') {
+                    more++;
+                }
+            }
+            if (more === 0) {
+                more = hiddenCountries;
+            }
+        }
+
+        var html = '';
+        for (var c = 0; c < 2; c++) {
+            html += '<div class="place-col' + (c === 0 ? ' place-col-first' : '') + '">';
+            var col = fill.cols[c];
+            for (var r = 0; r < col.length; r++) {
+                html += '<div class="place-row place-' + col[r].type + '">' + escapeHtml(col[r].text) + '</div>';
+            }
+            if (c === 1 && more > 0) {
+                html += '<div class="place-row place-more">+ ' + escapeHtml(formatNumber(more)) + ' more</div>';
             }
             html += '</div>';
         }
+        listEl.innerHTML = html;
+    }
 
-        statValue.innerHTML = html;
-        statDetail.textContent = '';
+    /**
+     * Month summary slide: photo strip, title, stats line and place list
+     */
+    function renderMonthSummarySlide(monthData) {
+        setPhotoDisplay('');
+        statDisplay.className = 'slide-month';
+        statCover.style.backgroundImage = '';
+
+        var html = '';
+        var photos = monthData.photos || [];
+        var tiles = 0;
+        for (var i = 0; i < photos.length && i < 3; i++) {
+            var src = safeSrc(photos[i].src);
+            html += (tiles === 0 ? '<div class="month-strip">' : '') +
+                '<div class="month-tile"' + (src ? ' style="background-image: url(' + escapeHtml(src) + ')"' : '') + '></div>';
+            tiles++;
+        }
+        if (tiles > 0) {
+            html += '</div>';
+        }
+
+        html += '<div class="month-title"><span class="month-name">' + escapeHtml(monthData.month_name || '') +
+            '</span><span class="month-year">' + escapeHtml(selectedYear) + '</span></div>';
+
+        var stats = summaryStats(monthData);
+        var parts = [];
+        for (var s = 0; s < stats.length; s++) {
+            parts.push(plural(stats[s].n, stats[s].one, stats[s].many));
+        }
+        html += '<div class="month-stats stat-label">' + escapeHtml(parts.join(DOT)) + '</div>';
+        html += '<div class="place-list"></div>';
+        statBody.innerHTML = html;
+
+        // Tile widths: three across the body width with two 6px gaps
+        var strip = statBody.firstChild;
+        if (tiles > 0 && strip.className === 'month-strip') {
+            var tileW = Math.floor((strip.clientWidth - 12) / 3);
+            var tileEls = strip.childNodes;
+            for (var t = 0; t < tileEls.length; t++) {
+                tileEls[t].style.width = tileW + 'px';
+            }
+        }
+
+        // The list takes the remaining height of the body
+        var listEl = statBody.lastChild;
+        var bodyStyle = window.getComputedStyle(statBody);
+        var bottom = statBody.getBoundingClientRect().bottom - (parseFloat(bodyStyle.paddingBottom) || 0);
+        var listH = Math.floor(bottom - listEl.getBoundingClientRect().top);
+        listEl.style.height = Math.max(0, listH) + 'px';
+        renderPlaceList(listEl, monthData.locations || []);
+    }
+
+    /**
+     * Rotation/resize: re-fit the month slide on screen (no fade). Skipped while
+     * a fade is pending: currentIndex already points at the incoming slide, but
+     * the outgoing one (maybe a grid) is still in place, and the fade callback
+     * renders the incoming slide at the new size anyway.
+     */
+    function handleResize() {
+        clearTimeout(resizeTimer);
+        resizeTimer = setTimeout(function() {
+            resizeTimer = null;
+            if (fadeTimer !== null) {
+                return;
+            }
+            var slide = slides[currentIndex];
+            if (slide && slide.type === 'month-summary' && statDisplay.style.display !== 'none') {
+                renderMonthSummarySlide(slide.data);
+            }
+        }, 250);
     }
 
     /**
@@ -399,15 +657,17 @@
         var photos = locationData.photos || [];
         var count = locationData.photo_count || photos.length;
 
+        var sub = (locationData.monthName ? locationData.monthName + ' ' + selectedYear + DOT : '') +
+            plural(count, 'Photo', 'Photos');
         var html = '<div class="location-header">';
         html += '<h2>' + escapeHtml(locationData.title || '') + '</h2>';
-        html += '<p>' + escapeHtml(String(count)) + ' photo' + (count !== 1 ? 's' : '') + '</p>';
+        html += '<div class="location-sub"><span class="rule"></span><span class="stat-label">' + escapeHtml(sub) + '</span></div>';
         html += '</div>';
 
         html += '<div class="photo-grid" id="justified-gallery">';
         for (var i = 0; i < photos.length; i++) {
             var photo = photos[i];
-            html += '<div><img src="' + escapeHtml(photo.src || '') + '" alt="' + escapeHtml(photo.filename || '') + '"';
+            html += '<div><img src="' + escapeHtml(safeSrc(photo.src)) + '" alt="' + escapeHtml(photo.filename || '') + '"';
             if (photo.w && photo.h) {
                 html += ' width="' + escapeHtml(String(photo.w)) + '" height="' + escapeHtml(String(photo.h)) + '"';
             }
@@ -415,9 +675,9 @@
         }
         html += '</div>';
 
-        photoDisplay.innerHTML = html;
+        setPhotoDisplay(html);
 
-        // A failed image becomes a blank rounded tile; the layout holds
+        // A failed image becomes a blank tile; the layout holds
         var imgs = photoDisplay.getElementsByTagName('img');
         for (var j = 0; j < imgs.length; j++) {
             imgs[j].onerror = function() {
@@ -427,9 +687,9 @@
 
         if (window.jQuery && jQuery.fn.justifiedGallery) {
             // Start sized so 9 photos fit on one screen at 1024x768, landscape and
-            // portrait, with no scrollbar. Landscape leaves the grid ~556px under
-            // the header and #photo-display's padding (50px top, 90px bottom), so
-            // 3 rows must each be <= ~180px: maxRowHeight caps stretched rows
+            // portrait, with no scrollbar. #photo-display's padding (40px top, 80px
+            // bottom) and the 62px header + 16px gap leave the grid ~570px in
+            // landscape, so 3 rows of <= ~180px: maxRowHeight caps stretched rows
             // (jG's last row takes the average). In portrait, rowHeight <= 175
             // keeps three 4:3 photos per row. Grids that still don't fit (e.g. a
             // panorama on its own row, or 16:9 photos in portrait) are shrunk by
@@ -479,7 +739,7 @@
         $g.justifiedGallery({
             rowHeight: rowHeight,
             maxRowHeight: maxRowHeight,
-            margins: 8,
+            margins: 6,
             border: 0,
             lastRow: 'nojustify',
             captions: false,
