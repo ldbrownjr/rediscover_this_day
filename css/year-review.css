@@ -1,4 +1,9 @@
-/* Year Review Picker Styles - iPad 2 compatible */
+/*
+ * Year in Review picker (year-review.php) - iPad 2 compatible.
+ * Editorial dark style: floats only (no flex, no grid, no CSS variables).
+ * Palette: background #0b0b0c, raised #161618, hairline rgba(255,255,255,0.10),
+ * text #f3efe8 / 0.72 / 0.50, accent (amber) #e0a548.
+ */
 
 * {
     margin: 0;
@@ -6,187 +11,212 @@
     box-sizing: border-box;
 }
 
+/* ---------- Fonts (one block per weight; Avenir Next has no Light on iOS 9) ---------- */
+
 body {
-    font-family: Arial, Helvetica, sans-serif;
-    background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
-    background-attachment: fixed;
-    color: #fff;
-    min-height: 100vh;
-    padding: 20px;
+    font-family: "AvenirNext-Regular", "Avenir Next", "Helvetica Neue", Helvetica, Arial, sans-serif;
+    font-weight: 400;
 }
 
-.year-review-container {
-    max-width: 1200px;
-    margin: 0 auto;
+.eyebrow,
+.year-header h1,
+.btn,
+.year-meta,
+.year-number,
+.year-off-panel h2 {
+    font-family: "AvenirNext-DemiBold", "Avenir Next", "Helvetica Neue", Helvetica, Arial, sans-serif;
+    font-weight: 600;
 }
+
+body {
+    background: #0b0b0c;
+    color: #f3efe8;
+    min-height: 100vh;
+    padding: 40px 32px 32px; /* top clears the 20px translucent status bar */
+    -webkit-tap-highlight-color: transparent;
+}
+
+.eyebrow {
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 3px;
+    color: #e0a548;
+}
+
+/* ---------- Header ---------- */
 
 .year-header {
-    background: rgba(0, 0, 0, 0.3);
-    padding: 20px 30px;
-    border-radius: 8px;
-    margin-bottom: 30px;
     overflow: hidden;
+    padding-bottom: 18px;
+    margin-bottom: 24px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.10);
+}
+
+.header-title {
+    float: left;
+}
+
+.header-title .eyebrow {
+    margin-bottom: 6px;
 }
 
 .year-header h1 {
-    font-size: 28px;
-    font-weight: 600;
-    margin-bottom: 15px;
-    float: left;
+    font-size: 34px;
+    letter-spacing: -0.5px;
+    line-height: 1.1;
 }
 
 .header-actions {
     float: right;
+    padding-top: 14px;
 }
 
-.header-actions a {
-    margin-left: 10px;
-}
-
+/* Ghost pill buttons */
 .btn {
-    padding: 10px 20px;
-    background: rgba(255, 255, 255, 0.2);
-    border: 2px solid rgba(255, 255, 255, 0.4);
-    color: #fff;
-    text-decoration: none;
-    border-radius: 5px;
-    font-size: 14px;
-    font-weight: 600;
+    -webkit-appearance: none;
     display: inline-block;
-    -webkit-transition: all 0.2s;
-    transition: all 0.2s;
+    margin-left: 10px;
+    padding: 10px 22px;
+    background: transparent;
+    border: 1px solid rgba(243, 239, 232, 0.3);
+    border-radius: 20px;
+    color: #f3efe8;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    text-decoration: none;
 }
 
-.btn:hover {
-    background: rgba(255, 255, 255, 0.3);
-    border-color: rgba(255, 255, 255, 0.6);
+.btn:active {
+    background: rgba(255, 255, 255, 0.10);
 }
+
+/* ---------- Year tiles ---------- */
 
 .year-grid {
-    display: -webkit-box;
-    display: -ms-flexbox;
-    display: flex;
-    -ms-flex-wrap: wrap;
-    flex-wrap: wrap;
-    margin-right: -20px;
-}
-
-.year-grid::after {
-    content: '';
-    -webkit-box-flex: 1;
-    -ms-flex: auto;
-    flex: auto;
+    overflow: hidden; /* clears the floated tiles */
 }
 
 .year-card {
-    background: rgba(255, 255, 255, 0.1);
-    border: 2px solid rgba(255, 255, 255, 0.2);
-    border-radius: 12px;
-    padding: 40px 20px;
-    text-align: center;
+    display: block;
+    float: left;
+    position: relative;
+    overflow: hidden;
+    width: 23.5%;
+    height: 154px;
+    margin: 0 2% 2% 0;
+    border-radius: 4px;
+    background: #161618;
+    color: #f3efe8;
     text-decoration: none;
-    color: #fff;
-    -webkit-transition: all 0.3s ease;
-    transition: all 0.3s ease;
-    cursor: pointer;
-    -webkit-box-flex: 0;
-    -ms-flex: 0 1 calc(25% - 20px);
-    flex: 0 1 calc(25% - 20px);
-    min-width: 150px;
-    margin: 0 20px 20px 0;
 }
 
-.year-card:hover {
-    background: rgba(255, 255, 255, 0.2);
-    border-color: rgba(255, 255, 255, 0.4);
-    -webkit-transform: translateY(-5px);
-    transform: translateY(-5px);
-    -webkit-box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+.year-card:nth-child(4n) {
+    margin-right: 0;
+}
+
+.year-card:active {
+    opacity: 0.8;
+}
+
+.year-cover,
+.year-scrim {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    left: 0;
+}
+
+.year-cover {
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+}
+
+.year-scrim {
+    background: -webkit-linear-gradient(bottom, rgba(0, 0, 0, 0.85) 0%, rgba(0, 0, 0, 0) 70%);
+    background: linear-gradient(to top, rgba(0, 0, 0, 0.85) 0%, rgba(0, 0, 0, 0) 70%);
+}
+
+.year-text {
+    position: absolute;
+    left: 14px;
+    right: 14px;
+    bottom: 12px;
+}
+
+.year-meta {
+    display: block;
+    margin-bottom: 4px;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    color: rgba(243, 239, 232, 0.80);
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .year-number {
-    font-size: 48px;
-    font-weight: bold;
+    display: block;
+    font-size: 40px;
+    letter-spacing: -1px;
+    line-height: 1;
+    color: #f3efe8;
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+}
+
+/* A year never opened yet: no cover, a short accent rule above the year */
+.year-card.is-plain {
+    border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.year-card.is-plain .year-number {
+    color: rgba(243, 239, 232, 0.72);
+}
+
+.year-card .rule {
+    display: block;
+    width: 24px;
+    height: 2px;
     margin-bottom: 10px;
+    background: #e0a548;
 }
 
-.year-label {
-    font-size: 16px;
-    opacity: 0.9;
+/* ---------- "Year in Review is turned off" ---------- */
+
+.year-off-panel {
+    padding-top: 80px;
+    text-align: center;
 }
 
-/* "Year in Review is turned off" panel */
-.year-off-panel p {
-    font-size: 18px;
-    margin-bottom: 15px;
+.year-off-panel h2 {
+    margin-bottom: 24px;
+    font-size: 28px;
 }
 
-/* Responsive breakpoints */
-@media (max-width: 1024px) {
-    .year-card {
-        -webkit-box-flex: 0;
-        -ms-flex: 0 1 calc(33.333% - 20px);
-        flex: 0 1 calc(33.333% - 20px);
-    }
+.year-off-panel .btn {
+    margin-left: 0;
 }
 
-@media (max-width: 768px) {
-    .year-grid {
-        margin-right: -15px;
-    }
+/* ---------- Portrait (768x1024) ---------- */
 
-    .year-card {
-        -webkit-box-flex: 0;
-        -ms-flex: 0 1 calc(50% - 15px);
-        flex: 0 1 calc(50% - 15px);
-        margin: 0 15px 15px 0;
-    }
-
-    .year-header {
-        padding: 15px 20px;
-    }
-
-    .year-header h1 {
-        float: none;
-        font-size: 24px;
-        margin-bottom: 10px;
-    }
-
-    .header-actions {
-        float: none;
-    }
-
-    .header-actions a {
-        margin-left: 0;
-        margin-right: 10px;
-        margin-top: 5px;
-    }
-
-    .year-number {
-        font-size: 36px;
-    }
-
-    .year-label {
-        font-size: 14px;
-    }
-}
-
-@media (max-width: 480px) {
+@media (max-width: 800px) {
     body {
-        padding: 15px;
+        padding: 40px 24px 24px;
     }
 
     .year-card {
-        -webkit-box-flex: 0;
-        -ms-flex: 0 1 calc(100% - 15px);
-        flex: 0 1 calc(100% - 15px);
-        padding: 30px 20px;
+        width: 32%;
     }
 
-    .header-actions a {
-        display: block;
-        margin: 5px 0;
-        text-align: center;
+    .year-card:nth-child(4n) {
+        margin-right: 2%;
+    }
+
+    .year-card:nth-child(3n) {
+        margin-right: 0;
     }
 }
